@@ -52,22 +52,16 @@
 
   firebase.auth().onAuthStateChanged(function (firebaseUser) {
     if (!firebaseUser) return
-
     firebaseUser.getIdToken(true)
       .then(function (token) {
         window.FCOS.authToken = token
         return FCOS.api('getMe', 'GET')
       })
-      .then(function (user) {
-        redirectByStatus(user.status)
-      })
-      .catch(function () {
-        firebase.auth().signOut()
-      })
+      .then(function (user) { redirectByStatus(user.status) })
+      .catch(function () { firebase.auth().signOut() })
   })
 
   btnLogin.addEventListener('click', handleLogin)
-
   passwordEl.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') handleLogin()
   })
@@ -75,26 +69,18 @@
   async function handleLogin() {
     var email    = emailEl.value.trim()
     var password = passwordEl.value
-
     clearMsg()
-
     if (!email || !password) {
       showMsg('error', 'Email dan password wajib diisi.')
       return
     }
-
     setLoading(btnLogin, 'Masuk...')
-
     try {
       var cred  = await firebase.auth().signInWithEmailAndPassword(email, password)
       var token = await cred.user.getIdToken(true)
-
       window.FCOS.authToken = token
-
       var user = await FCOS.api('getMe', 'GET')
-
       redirectByStatus(user.status)
-
     } catch (err) {
       showMsg('error', friendlyError(err.code || err.message))
       resetLoading(btnLogin, 'Login')
@@ -103,59 +89,44 @@
 
   linkForgot.addEventListener('click', async function (e) {
     e.preventDefault()
-
     var email = emailEl.value.trim()
-
     if (!email) {
       showMsg('error', 'Masukkan email kamu terlebih dahulu, lalu klik Lupa Password.')
       return
     }
-
     linkForgot.style.pointerEvents = 'none'
     linkForgot.textContent         = 'Mengirim...'
-
     try {
       await firebase.auth().sendPasswordResetEmail(email)
-    } catch (err) {
-      // swallow
-    } finally {
+    } catch (err) {}
+    finally {
       linkForgot.style.pointerEvents = ''
       linkForgot.textContent         = 'Lupa password?'
     }
-
     showMsg('success', 'Jika email terdaftar, link reset password sudah dikirim. Cek inbox kamu.')
   })
 
   function redirectByStatus(status) {
-    if (status === 'ACTIVE')   { window.location.href = '/app.html';              return }
+    if (status === 'ACTIVE')   { window.location.href = '/dashboard.html';        return }
     if (status === 'PENDING')  { window.location.href = '/waiting-approval.html'; return }
     if (status === 'INACTIVE') { window.location.href = '/access-denied.html';    return }
     window.location.href = '/access-denied.html'
   }
 
   function showMsg(type, msg) {
-    var el           = document.getElementById('alert-msg')
-    el.textContent   = msg
-    el.className     = 'alert alert--' + type
-    el.style.display = 'block'
+    var el = document.getElementById('alert-msg')
+    el.textContent = msg; el.className = 'alert alert--' + type; el.style.display = 'block'
   }
-
   function clearMsg() {
-    var el           = document.getElementById('alert-msg')
-    el.style.display = 'none'
-    el.textContent   = ''
+    var el = document.getElementById('alert-msg')
+    el.style.display = 'none'; el.textContent = ''
   }
-
   function setLoading(btn, text) {
-    btn.disabled    = true
-    btn.textContent = text
+    btn.disabled = true; btn.textContent = text
   }
-
   function resetLoading(btn, text) {
-    btn.disabled    = false
-    btn.textContent = text
+    btn.disabled = false; btn.textContent = text
   }
-
   function friendlyError(code) {
     var map = {
       'auth/user-not-found'         : 'Email tidak terdaftar.',

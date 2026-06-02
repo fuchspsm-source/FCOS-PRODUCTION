@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Detail User</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html" class="active">User Registry</a>
+      <span style="display:block; padding:10px 24px; color:#475569;
+                   font-size:0.9rem; cursor:not-allowed;">
+        Approval Matrix (coming soon)
+      </span>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Detail User</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title" id="page-title">Detail User</div>
+            <a href="/users/list.html" class="text-muted text-small">
+              <- Kembali ke daftar
+            </a>
+          </div>
+        </div>
+
+        <div id="alert-msg" class="alert" style="max-width:600px;"></div>
+
+        <div class="card" style="max-width:600px;">
+          <div class="card__title">Informasi Akun</div>
+          <dl class="detail-grid" id="user-info"></dl>
+        </div>
+
+        <div class="card" style="max-width:600px;" id="card-roles">
+          <div class="card__title">
+            Role
+            <span id="role-count-label" class="text-small text-muted"
+                  style="font-weight:400; margin-left:8px;"></span>
+          </div>
+          <div id="role-validation-error" class="alert alert--error"
+               style="margin-bottom:12px;"></div>
+          <div class="checkbox-group" id="role-checkboxes"></div>
+          <div style="margin-top:16px;" id="role-action-area"></div>
+        </div>
+
+        <div class="card" style="max-width:600px;" id="card-status">
+          <div class="card__title">Status Akun</div>
+          <p class="text-muted text-small" style="margin-bottom:16px;"
+             id="status-description"></p>
+          <div id="status-action-area"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+  var ALL_ROLES = [
+    { value: 'SUPER_ADMIN',       label: 'Super Admin'       },
+    { value: 'ADMIN',             label: 'Admin'             },
+    { value: 'COMMERCIAL_ADMIN',  label: 'Commercial Admin'  },
+    { value: 'CUSTOMER_SERVICE',  label: 'Customer Service'  },
+    { value: 'AREA_MANAGER',      label: 'Area Manager'      },
+    { value: 'REGIONAL_MANAGER',  label: 'Regional Manager'  },
+    { value: 'DIVISION_MANAGER',  label: 'Division Manager'  },
+    { value: 'SALES_DIRECTOR',    label: 'Sales Director'    },
+    { value: 'MANAGING_DIRECTOR', label: 'Managing Director' }
+  ]
+
+  var MAX_ROLES   = 3
+  var targetUid   = FCOS.getParam('uid')
+  var targetUser  = null
+  var sessionUser = null
+
+  if (!targetUid) window.location.href = '/users/list.html'
+
+  FCOS.initPage().then(function (user) {
+    FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN')
+    sessionUser = user
+    document.getElementById('topbar-name').textContent  = user.name
+    document.getElementById('sidebar-footer').innerHTML =
+      '<div>' + escHtml(user.name) + '</div>' +
+      '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+    loadUser()
+  })
+
+  async function loadUser() {
+    try {
+      targetUser = await FCOS.api('getUser', 'GET', null, { uid: targetUid })
+      document.getElementById('loading').style.display = 'none'
+      document.getElementById('main-content').classList.remove('hidden')
+      renderUserInfo()
+      renderRoleCard()
+      renderStatusCard()
+    } catch (err) {
+      document.getElementById('loading').textContent = 'Gagal memuat user: ' + err.message
+    }
+  }
+
+  async function renderUserInfo() {
+    document.getElementById('page-title').textContent = targetUser.name
+    paintUserInfo('Memuat...')
+    var approvedByName = '—'
+    if (targetUser.approved_by) {
+      try {
+        var approver   = await FCOS.api('getUser', 'GET', null, { uid: targetUser.approved_by })
+        approvedByName = escHtml(approver.name)
+      } catch (e) {
+        approvedByName = escHtml(targetUser.approved_by)
+      }
+    }
+    paintUserInfo(approvedByName)
+  }
+
+  function paintUserInfo(approvedByDisplay) {
+    document.getElementById('user-info').innerHTML =
+      '<dt>Nama</dt>'           + '<dd>' + escHtml(targetUser.name)              + '</dd>' +
+      '<dt>Email</dt>'          + '<dd>' + escHtml(targetUser.email)             + '</dd>' +
+      '<dt>Status</dt>'         + '<dd>' + FCOS.statusBadge(targetUser.status)   + '</dd>' +
+      '<dt>Role</dt>'           + '<dd>' + FCOS.formatRoles(targetUser.roles)    + '</dd>' +
+      '<dt>Terdaftar</dt>'      + '<dd>' + FCOS.formatDateTime(targetUser.created_at)  + '</dd>' +
+      '<dt>Disetujui Pada</dt>' + '<dd>' + FCOS.formatDateTime(targetUser.approved_at) + '</dd>' +
+      '<dt>Disetujui Oleh</dt>' + '<dd>' + approvedByDisplay                    + '</dd>'
+  }
+
+  function renderRoleCard() {
+    var isSuperAdmin = FCOS.hasRole('SUPER_ADMIN')
+    var container    = document.getElementById('role-checkboxes')
+
+    container.innerHTML = ALL_ROLES.map(function (r) {
+      var checked  = (targetUser.roles || []).includes(r.value) ? 'checked' : ''
+      var disabled = !isSuperAdmin ? 'disabled' : ''
+      return '<label><input type="checkbox" value="' + r.value + '" ' +
+             checked + ' ' + disabled + '>' + r.label + '</label>'
+    }).join('')
+
+    updateRoleCountLabel()
+
+    container.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        enforceMaxRoles(cb)
+        updateRoleCountLabel()
+      })
+    })
+
+    var actionArea = document.getElementById('role-action-area')
+
+    if (!isSuperAdmin) {
+      actionArea.innerHTML =
+        '<p class="text-muted text-small">Hanya Super Admin yang dapat mengubah role.</p>'
+      return
+    }
+
+    if (targetUser.status === 'PENDING') {
+      actionArea.innerHTML =
+        '<button class="btn btn--success" id="btn-approve">Approve &amp; Aktifkan</button>'
+      document.getElementById('btn-approve').addEventListener('click', handleApprove)
+    } else if (targetUser.status === 'ACTIVE' || targetUser.status === 'INACTIVE') {
+      actionArea.innerHTML =
+        '<button class="btn btn--primary" id="btn-update-roles">Simpan Role</button>'
+      document.getElementById('btn-update-roles').addEventListener('click', handleUpdateRoles)
+    }
+  }
+
+  function renderStatusCard() {
+    var isSuperAdmin = FCOS.hasRole('SUPER_ADMIN')
+    var descEl       = document.getElementById('status-description')
+    var actionArea   = document.getElementById('status-action-area')
+    actionArea.innerHTML = ''
+
+    if (targetUser.status === 'PENDING') {
+      descEl.textContent = 'Akun menunggu persetujuan. Gunakan tombol Approve di bagian Role di atas.'
+    } else if (targetUser.status === 'ACTIVE') {
+      descEl.textContent = 'Akun aktif. User dapat login dan menggunakan FCOS.'
+      if (isSuperAdmin) {
+        if (targetUser.uid === sessionUser.uid) {
+          actionArea.innerHTML =
+            '<p class="text-muted text-small">Kamu tidak dapat menonaktifkan akun sendiri.</p>'
+        } else {
+          actionArea.innerHTML =
+            '<button class="btn btn--danger btn--sm" id="btn-deactivate">Deactivate User</button>'
+          document.getElementById('btn-deactivate').addEventListener('click', handleDeactivate)
+        }
+      }
+    } else if (targetUser.status === 'INACTIVE') {
+      descEl.textContent = 'Akun tidak aktif. User tidak dapat login.'
+      if (isSuperAdmin) {
+        actionArea.innerHTML =
+          '<button class="btn btn--success btn--sm" id="btn-reactivate">Reactivate User</button>'
+        document.getElementById('btn-reactivate').addEventListener('click', handleReactivate)
+      }
+    }
+
+    if (!isSuperAdmin) {
+      actionArea.innerHTML =
+        '<p class="text-muted text-small">Hanya Super Admin yang dapat mengubah status akun.</p>'
+    }
+  }
+
+  function getSelectedRoles() {
+    return Array.from(
+      document.querySelectorAll('#role-checkboxes input[type=checkbox]:checked')
+    ).map(function (cb) { return cb.value })
+  }
+
+  function enforceMaxRoles(changedCb) {
+    var checkboxes = document.querySelectorAll('#role-checkboxes input[type=checkbox]')
+    var checked    = Array.from(checkboxes).filter(function (cb) { return cb.checked })
+    if (checked.length > MAX_ROLES) {
+      changedCb.checked = false
+      showRoleValidationError('Maksimal ' + MAX_ROLES + ' role yang dapat dipilih.')
+    } else {
+      hideRoleValidationError()
+    }
+  }
+
+  function updateRoleCountLabel() {
+    var count = document.querySelectorAll(
+      '#role-checkboxes input[type=checkbox]:checked').length
+    document.getElementById('role-count-label').textContent =
+      '(' + count + '/' + MAX_ROLES + ' dipilih)'
+  }
+
+  function showRoleValidationError(msg) {
+    var el = document.getElementById('role-validation-error')
+    el.textContent = msg; el.style.display = 'block'
+  }
+
+  function hideRoleValidationError() {
+    var el = document.getElementById('role-validation-error')
+    el.style.display = 'none'; el.textContent = ''
+  }
+
+  async function handleApprove() {
+    var roles = getSelectedRoles()
+    hideRoleValidationError(); clearGlobalMsg()
+    if (roles.length === 0) {
+      showRoleValidationError('Pilih minimal 1 role sebelum approve.')
+      return
+    }
+    var btn = document.getElementById('btn-approve')
+    FCOS.setLoading(btn, 'Menyimpan...')
+    try {
+      await FCOS.api('approveUser', 'POST', { uid: targetUid, roles: roles })
+      targetUser.status = 'ACTIVE'; targetUser.roles = roles
+      targetUser.approved_by = sessionUser.uid
+      targetUser.approved_at = { _seconds: Math.floor(Date.now() / 1000) }
+      showGlobalMsg('success', 'User berhasil disetujui dan diaktifkan.')
+      renderUserInfo(); renderRoleCard(); renderStatusCard()
+    } catch (err) {
+      showGlobalMsg('error', 'Gagal approve: ' + err.message)
+      FCOS.clearLoading(btn, 'Approve & Aktifkan')
+    }
+  }
+
+  async function handleUpdateRoles() {
+    var roles = getSelectedRoles()
+    hideRoleValidationError(); clearGlobalMsg()
+    if (roles.length === 0) {
+      showRoleValidationError('Pilih minimal 1 role.')
+      return
+    }
+    var btn = document.getElementById('btn-update-roles')
+    FCOS.setLoading(btn, 'Menyimpan...')
+    try {
+      await FCOS.api('updateUserRoles', 'POST', { uid: targetUid, roles: roles })
+      targetUser.roles = roles
+      showGlobalMsg('success', 'Role berhasil diperbarui.')
+      renderUserInfo(); FCOS.clearLoading(btn, 'Simpan Role')
+    } catch (err) {
+      showGlobalMsg('error', 'Gagal update role: ' + err.message)
+      FCOS.clearLoading(btn, 'Simpan Role')
+    }
+  }
+
+  async function handleDeactivate() {
+    if (!FCOS.confirm('Nonaktifkan akun ' + targetUser.name + '?\nUser tidak akan bisa login.')) return
+    var btn = document.getElementById('btn-deactivate')
+    FCOS.setLoading(btn, 'Memproses...'); clearGlobalMsg()
+    try {
+      await FCOS.api('deactivateUser', 'POST', { uid: targetUid })
+      targetUser.status = 'INACTIVE'
+      showGlobalMsg('success', 'Akun berhasil dinonaktifkan.')
+      renderUserInfo(); renderStatusCard()
+    } catch (err) {
+      showGlobalMsg('error', 'Gagal deactivate: ' + err.message)
+      FCOS.clearLoading(btn, 'Deactivate User')
+    }
+  }
+
+  async function handleReactivate() {
+    if (!FCOS.confirm('Aktifkan kembali akun ' + targetUser.name + '?')) return
+    var btn = document.getElementById('btn-reactivate')
+    FCOS.setLoading(btn, 'Memproses...'); clearGlobalMsg()
+    try {
+      await FCOS.api('reactivateUser', 'POST', { uid: targetUid })
+      targetUser.status = 'ACTIVE'
+      showGlobalMsg('success', 'Akun berhasil diaktifkan kembali.')
+      renderUserInfo(); renderRoleCard(); renderStatusCard()
+    } catch (err) {
+      showGlobalMsg('error', 'Gagal reactivate: ' + err.message)
+      FCOS.clearLoading(btn, 'Reactivate User')
+    }
+  }
+
+  function showGlobalMsg(type, msg) {
+    var el = document.getElementById('alert-msg')
+    el.textContent = msg; el.className = 'alert alert--' + type; el.style.display = 'block'
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  function clearGlobalMsg() {
+    var el = document.getElementById('alert-msg')
+    el.style.display = 'none'; el.textContent = ''
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', function () {
+    FCOS.logout()
+  })
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+</script>
+
+</body>
+</html>
