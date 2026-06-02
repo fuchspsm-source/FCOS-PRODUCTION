@@ -85,26 +85,17 @@ Object.assign(window.FCOS, {
   BASE_URL
 })
 
-async function createMatrix(payload) {
-  return api('fcos-createMatrix', 'POST', payload);
-}
-
-async function closeMatrix(matrixId) {
-  return api('fcos-closeMatrix', 'POST', { matrixId });
-}
-
-Object.assign(window.FCOS, { api, FCOSApiError, BASE_URL })
 
 async function listMatrix() {
-  return api('fcos-listMatrix');
+  return api('listMatrix');
 }
 async function getMatrix(matrixId) {
-  return api('fcos-getMatrix', 'GET', null, { matrixId });
+  return api('getMatrix', 'GET', null, { matrixId });
 }
 async function createMatrix(payload) {
-  return api('fcos-createMatrix', 'POST', payload);
+  return api('createMatrix', 'POST', payload);
 }
 async function closeMatrix(matrixId) {
-  return api('fcos-closeMatrix', 'POST', { matrixId });
+  return api('closeMatrix', 'POST', { matrixId });
 }
 Object.assign(window.FCOS, { listMatrix, getMatrix, createMatrix, closeMatrix });
