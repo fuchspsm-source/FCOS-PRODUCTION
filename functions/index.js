@@ -1,17 +1,19 @@
 'use strict'
-const { onRequest } = require('firebase-functions/v2/https')
-const express       = require('express')
-const { requireAuth } = require('./middleware')
 
-const app = express()
-app.use(express.json())
+const users  = require('./users')
+const matrix = require('./matrix')
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', ts: Date.now() })
-})
+exports.register = users.register
+exports.getMe    = users.getMe
 
-app.get('/me', requireAuth, (req, res) => {
-  res.json({ uid: req.user.uid, roles: req.user.roles, status: req.user.status })
-})
+exports.listUsers       = users.listUsers
+exports.getUser         = users.getUser
+exports.approveUser     = users.approveUser
+exports.updateUserRoles = users.updateUserRoles
+exports.deactivateUser  = users.deactivateUser
+exports.reactivateUser  = users.reactivateUser
 
-exports.api = onRequest({ region: 'asia-southeast2' }, app)
+exports.listMatrix   = matrix.listMatrix
+exports.getMatrix    = matrix.getMatrix
+exports.createMatrix = matrix.createMatrix
+exports.closeMatrix  = matrix.closeMatrix
