@@ -1,7 +1,28 @@
 'use strict'
 const { admin, db } = require('./db')
 const { STATUS }    = require('./constants')
+
+const ALLOWED_ORIGINS = [
+  'https://fcos-production.web.app',
+  'https://fcos-production.firebaseapp.com',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000'
+]
+
+function setCors(req, res) {
+  const origin = req.headers.origin || ''
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin)
+  }
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.set('Access-Control-Max-Age', '3600')
+}
+
 async function requireAuth(req, res, next) {
+  setCors(req, res)
+  if (req.method === 'OPTIONS') return res.status(204).send('')
+
   try {
     const authHeader = req.headers.authorization || ''
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
@@ -20,12 +41,14 @@ async function requireAuth(req, res, next) {
     return res.status(500).json({ error: 'Internal error' })
   }
 }
+
 function requireActive(req, res, next) {
   if (req.user.status !== STATUS.ACTIVE) {
     return res.status(403).json({ error: 'PENDING', message: 'Account is awaiting approval' })
   }
   next()
 }
+
 function requireRole(...requiredRoles) {
   return (req, res, next) => {
     const userRoles = req.user.roles || []
@@ -34,4 +57,5 @@ function requireRole(...requiredRoles) {
     next()
   }
 }
-module.exports = { requireAuth, requireActive, requireRole }
+
+module.exports = { requireAuth, requireActive, requireRole, setCors }
