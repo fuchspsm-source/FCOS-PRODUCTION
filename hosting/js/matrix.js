@@ -59,8 +59,8 @@
 
   async function loadMatrixList() {
     try {
-      const records = await listMatrix();
-      renderTable(records);
+      const result = await listMatrix();
+      renderTable(result.matrix);
     } catch (err) {
       showError(err);
     }
