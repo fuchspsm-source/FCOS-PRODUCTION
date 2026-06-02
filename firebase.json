@@ -12,6 +12,34 @@
     ],
     "rewrites": [
       {
+        "source": "/login",
+        "destination": "/login.html"
+      },
+      {
+        "source": "/register",
+        "destination": "/register.html"
+      },
+      {
+        "source": "/dashboard",
+        "destination": "/dashboard.html"
+      },
+      {
+        "source": "/app",
+        "destination": "/app.html"
+      },
+      {
+        "source": "/admin/matrix",
+        "destination": "/admin/matrix.html"
+      },
+      {
+        "source": "/users/list",
+        "destination": "/users/list.html"
+      },
+      {
+        "source": "/users/detail",
+        "destination": "/users/detail.html"
+      },
+      {
         "source": "**",
         "destination": "/login.html"
       }
