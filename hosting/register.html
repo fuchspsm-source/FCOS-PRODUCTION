@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Daftar Akun</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-card__logo">FCOS</div>
+    <div class="auth-card__subtitle">Daftar akun baru</div>
+
+    <div id="alert-msg" class="alert"></div>
+
+    <div class="form-group">
+      <label for="name">Nama Lengkap</label>
+      <input type="text" id="name" class="form-control"
+             placeholder="Nama kamu" autocomplete="name">
+    </div>
+
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" class="form-control"
+             placeholder="nama@fuchs.com" autocomplete="email">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" class="form-control"
+             placeholder="Minimal 6 karakter" autocomplete="new-password">
+    </div>
+
+    <div class="form-group">
+      <label for="password-confirm">Konfirmasi Password</label>
+      <input type="password" id="password-confirm" class="form-control"
+             placeholder="Ulangi password" autocomplete="new-password">
+    </div>
+
+    <button id="btn-register" class="btn btn--primary btn--full">Daftar</button>
+
+    <div class="auth-card__footer">
+      Sudah punya akun? <a href="/login.html">Login</a>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+
+<script>
+  var btnRegister = document.getElementById('btn-register')
+
+  btnRegister.addEventListener('click', handleRegister)
+
+  document.getElementById('password-confirm').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleRegister()
+  })
+
+  async function handleRegister() {
+    var name            = document.getElementById('name').value.trim()
+    var email           = document.getElementById('email').value.trim()
+    var password        = document.getElementById('password').value
+    var passwordConfirm = document.getElementById('password-confirm').value
+
+    clearMsg()
+
+    if (!name || !email || !password || !passwordConfirm) {
+      showMsg('error', 'Semua field wajib diisi.')
+      return
+    }
+
+    if (name.length < 2) {
+      showMsg('error', 'Nama minimal 2 karakter.')
+      return
+    }
+
+    if (password.length < 6) {
+      showMsg('error', 'Password minimal 6 karakter.')
+      return
+    }
+
+    if (password !== passwordConfirm) {
+      showMsg('error', 'Password dan konfirmasi password tidak sama.')
+      return
+    }
+
+    setLoading(btnRegister, 'Mendaftar...')
+
+    var firebaseUser = null
+    var uid          = null
+
+    try {
+      var cred  = await firebase.auth().createUserWithEmailAndPassword(email, password)
+      firebaseUser  = cred.user
+      uid           = firebaseUser.uid
+      var token     = await firebaseUser.getIdToken(true)
+
+      window.FCOS.authToken = token
+
+      await FCOS.api('register', 'POST', { uid, name, email })
+
+      window.location.href = '/waiting-approval.html'
+
+    } catch (err) {
+      if (firebaseUser) {
+        try {
+          await firebaseUser.delete()
+          console.warn('[register] Auth account rolled back for uid:', uid)
+        } catch (rollbackErr) {
+          console.error(
+            '[register] ROLLBACK FAILED — orphaned Auth account.',
+            'uid:', uid,
+            'email:', email,
+            'rollback error:', rollbackErr.code || rollbackErr.message
+          )
+        }
+      }
+
+      showMsg('error', friendlyError(err.code || err.message))
+      resetLoading(btnRegister, 'Daftar')
+    }
+  }
+
+  function showMsg(type, msg) {
+    var el           = document.getElementById('alert-msg')
+    el.textContent   = msg
+    el.className     = 'alert alert--' + type
+    el.style.display = 'block'
+  }
+
+  function clearMsg() {
+    var el           = document.getElementById('alert-msg')
+    el.style.display = 'none'
+    el.textContent   = ''
+  }
+
+  function setLoading(btn, text) {
+    btn.disabled    = true
+    btn._origText   = btn.textContent
+    btn.textContent = text
+  }
+
+  function resetLoading(btn, text) {
+    btn.disabled    = false
+    btn.textContent = text
+  }
+
+  function friendlyError(code) {
+    var map = {
+      'auth/email-already-in-use'   : 'Email sudah terdaftar. Silakan login.',
+      'auth/invalid-email'          : 'Format email tidak valid.',
+      'auth/weak-password'          : 'Password terlalu lemah. Gunakan minimal 6 karakter.',
+      'auth/network-request-failed' : 'Koneksi gagal. Periksa jaringan kamu.'
+    }
+    return map[code] || 'Pendaftaran gagal. Silakan coba lagi.'
+  }
+</script>
+
+</body>
+</html>
