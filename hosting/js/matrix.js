@@ -200,7 +200,9 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     bindEvents();
-    loadMatrixList();
+    FCOS.initPage().then(function () {
+      loadMatrixList();
+    });
   });
 
 })();
