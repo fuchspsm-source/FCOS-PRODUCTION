@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Approval Matrix — FCOS</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    /* ── Page-level layout ───────────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .page-header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    /* ── Table card ──────────────────────────────────────────── */
+    .table-card {
+      background: var(--color-surface, #fff);
+      border: 1px solid var(--color-border, #e5e7eb);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .data-table thead {
+      background: var(--color-surface-alt, #f9fafb);
+    }
+
+    .data-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-secondary, #6b7280);
+      border-bottom: 1px solid var(--color-border, #e5e7eb);
+      white-space: nowrap;
+    }
+
+    .data-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--color-border, #e5e7eb);
+      color: var(--color-text, #111827);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--color-surface-alt, #f9fafb);
+    }
+
+    /* ── Status badge ────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.8;
+    }
+
+    .badge-active {
+      background: var(--color-success-bg, #d1fae5);
+      color: var(--color-success, #065f46);
+    }
+
+    /* ── Action column ───────────────────────────────────────── */
+    .data-table th.col-action,
+    .data-table td.col-action {
+      text-align: right;
+      width: 80px;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      line-height: 1;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--color-primary, #2563eb);
+      color: #fff;
+      border-color: var(--color-primary, #2563eb);
+    }
+
+    .btn-primary:hover {
+      background: var(--color-primary-hover, #1d4ed8);
+      border-color: var(--color-primary-hover, #1d4ed8);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--color-text, #111827);
+      border-color: var(--color-border, #e5e7eb);
+    }
+
+    .btn-secondary:hover {
+      background: var(--color-surface-alt, #f9fafb);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-primary, #2563eb);
+      border-color: transparent;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
+
+    .btn-ghost:hover {
+      background: var(--color-primary-bg, #eff6ff);
+    }
+
+    .btn-danger {
+      background: var(--color-danger, #dc2626);
+      color: #fff;
+      border-color: var(--color-danger, #dc2626);
+    }
+
+    .btn-danger:hover {
+      background: var(--color-danger-hover, #b91c1c);
+      border-color: var(--color-danger-hover, #b91c1c);
+    }
+
+    /* ── Modal overlay ───────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-overlay.is-open {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--color-surface, #fff);
+      border-radius: 10px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--color-border, #e5e7eb);
+    }
+
+    .modal-header h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .modal-close-x {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      color: var(--color-text-secondary, #6b7280);
+      font-size: 1.1rem;
+    }
+
+    .modal-close-x:hover {
+      color: var(--color-text, #111827);
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 24px;
+      border-top: 1px solid var(--color-border, #e5e7eb);
+    }
+
+    /* ── Form fields ─────────────────────────────────────────── */
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--color-text, #111827);
+      margin-bottom: 6px;
+    }
+
+    .form-label .required {
+      color: var(--color-danger, #dc2626);
+      margin-left: 2px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--color-border, #e5e7eb);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: var(--color-surface, #fff);
+      color: var(--color-text, #111827);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      box-sizing: border-box;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--color-primary, #2563eb);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .form-divider {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary, #6b7280);
+      margin: 20px 0 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--color-border, #e5e7eb);
+    }
+
+    /* ── Detail view ─────────────────────────────────────────── */
+    .detail-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-border, #e5e7eb);
+      font-size: 0.875rem;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .detail-label {
+      flex: 0 0 120px;
+      font-weight: 600;
+      color: var(--color-text-secondary, #6b7280);
+      font-size: 0.8rem;
+    }
+
+    .detail-value {
+      color: var(--color-text, #111827);
+    }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .data-table th,
+      .data-table td {
+        padding: 10px 12px;
+      }
+
+      .detail-row {
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .detail-label {
+        flex: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Shared app shell injected by app.html / auth.js -->
+  <div id="app-shell"></div>
+
+  <!-- ── Main content ───────────────────────────────────────── -->
+  <main class="main-content" id="main-content">
+    <div class="container">
+
+      <!-- Page header -->
+      <div class="page-header">
+        <h1>Approval Matrix</h1>
+        <button class="btn btn-primary" id="btn-create-matrix" type="button">
+          + Create Matrix
+        </button>
+      </div>
+
+      <!-- Matrix table -->
+      <div class="table-card">
+        <table class="data-table" aria-label="Approval Matrix list">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="col-action">Action</th>
+            </tr>
+          </thead>
+          <tbody id="matrix-table-body">
+            <!-- Sample rows — replaced by JS when wired -->
+            <tr>
+              <td>Sales Approval</td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td class="col-action">
+                <button class="btn btn-ghost" type="button" data-matrix-id="sample-1">View</button>
+              </td>
+            </tr>
+            <tr>
+              <td>Pricing Approval</td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td class="col-action">
+                <button class="btn btn-ghost" type="button" data-matrix-id="sample-2">View</button>
+              </td>
+            </tr>
+            <tr>
+              <td>Customer Approval</td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td class="col-action">
+                <button class="btn btn-ghost" type="button" data-matrix-id="sample-3">View</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div><!-- /.container -->
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════════
+       MODAL: Create Matrix
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-create-matrix" role="dialog" aria-modal="true" aria-labelledby="create-matrix-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="create-matrix-title">Create Matrix</h2>
+        <button class="modal-close-x" type="button" aria-label="Close" data-close-modal="modal-create-matrix">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="form-create-matrix" novalidate>
+
+          <div class="form-group">
+            <label class="form-label" for="input-matrix-name">
+              Matrix Name <span class="required">*</span>
+            </label>
+            <input
+              class="form-control"
+              type="text"
+              id="input-matrix-name"
+              name="matrix_name"
+              placeholder="e.g. Sales Approval"
+              autocomplete="off"
+              required
+            />
+          </div>
+
+          <div class="form-divider">Approval Levels</div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-level-1">
+              Level 1 Role <span class="required">*</span>
+            </label>
+            <select class="form-control" id="select-level-1" name="level_1_role" required>
+              <option value="" disabled selected>— Select role —</option>
+              <!-- Options populated by JS via listUsers -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-level-2">
+              Level 2 Role <span class="required">*</span>
+            </label>
+            <select class="form-control" id="select-level-2" name="level_2_role" required>
+              <option value="" disabled selected>— Select role —</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-level-3">
+              Level 3 Role <span class="required">*</span>
+            </label>
+            <select class="form-control" id="select-level-3" name="level_3_role" required>
+              <option value="" disabled selected>— Select role —</option>
+            </select>
+          </div>
+
+        </form>
+      </div><!-- /.modal-body -->
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-close-modal="modal-create-matrix">Cancel</button>
+        <button class="btn btn-primary" type="button" id="btn-save-matrix">Save</button>
+      </div>
+    </div><!-- /.modal -->
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       MODAL: Matrix Detail (View)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-matrix-detail" role="dialog" aria-modal="true" aria-labelledby="matrix-detail-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="matrix-detail-title">Matrix Detail</h2>
+        <button class="modal-close-x" type="button" aria-label="Close" data-close-modal="modal-matrix-detail">✕</button>
+      </div>
+
+      <div class="modal-body" id="matrix-detail-body">
+        <!-- Sample content — replaced by JS when wired -->
+        <div class="detail-row">
+          <span class="detail-label">Matrix Name</span>
+          <span class="detail-value" id="detail-matrix-name">Sales Approval</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Level 1</span>
+          <span class="detail-value" id="detail-level-1">Sales Manager</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Level 2</span>
+          <span class="detail-value" id="detail-level-2">Country Manager</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Level 3</span>
+          <span class="detail-value" id="detail-level-3">Finance Director</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value" id="detail-status">
+            <span class="badge badge-active">Active</span>
+          </span>
+        </div>
+      </div><!-- /.modal-body -->
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-close-modal="modal-matrix-detail">Close</button>
+        <button class="btn btn-danger" type="button" id="btn-close-matrix" data-matrix-id="">Close Matrix</button>
+      </div>
+    </div><!-- /.modal -->
+  </div>
+
+  <!-- ── Minimal modal orchestration (open/close only, no Firebase) ── -->
+  <script>
+    (function () {
+      // Open create-matrix modal
+      document.getElementById('btn-create-matrix').addEventListener('click', function () {
+        document.getElementById('modal-create-matrix').classList.add('is-open');
+      });
+
+      // Open detail modal from table View buttons (sample rows)
+      document.getElementById('matrix-table-body').addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-matrix-id]');
+        if (!btn) return;
+        // Pass matrix id to close button for future wiring
+        document.getElementById('btn-close-matrix').dataset.matrixId = btn.dataset.matrixId;
+        document.getElementById('modal-matrix-detail').classList.add('is-open');
+      });
+
+      // Close buttons (Cancel / Close / ✕)
+      document.querySelectorAll('[data-close-modal]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var targetId = el.getAttribute('data-close-modal');
+          document.getElementById(targetId).classList.remove('is-open');
+        });
+      });
+
+      // Close on overlay click
+      document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+        overlay.addEventListener('click', function (e) {
+          if (e.target === overlay) {
+            overlay.classList.remove('is-open');
+          }
+        });
+      });
+
+      // Close on Escape
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.modal-overlay.is-open').forEach(function (m) {
+            m.classList.remove('is-open');
+          });
+        }
+      });
+    })();
+  </script>
+
+  <script src="../assets/js/firebase-init.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <!-- matrix.js will be loaded here in Batch 5 -->
+
+</body>
+</html>
