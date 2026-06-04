@@ -50,6 +50,7 @@
           <button class="filter-tab" data-tab="families">Families</button>
           <button class="filter-tab" data-tab="genus">Master SKU</button>
           <button class="filter-tab" data-tab="codes">Product Codes</button>
+          <button class="filter-tab" data-tab="import">Import Excel</button>
         </div>
 
         <!-- TAB: BRANDS -->
@@ -138,6 +139,48 @@
                 <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- TAB: IMPORT EXCEL -->
+        <div id="tab-import" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card__title">Panduan Import Product</div>
+            <div style="font-size:0.88rem; line-height:1.9; color:#475569;">
+              <strong style="color:#1a1a2e;">Kolom wajib:</strong> ProductCode &nbsp;|&nbsp; ProductName &nbsp;|&nbsp; SKU<br>
+              <strong style="color:#1a1a2e;">Duplikat:</strong> ProductCode yang sudah ada akan ditandai CONFLICT.<br>
+              <strong style="color:#1a1a2e;">Format:</strong> File Excel (.xlsx / .xls), maksimum 500 baris.
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn btn--secondary btn--sm" onclick="downloadProductTemplate()">Download Template</button>
+            </div>
+          </div>
+          <div id="import-zone"
+               style="border:2px dashed #cbd5e1; border-radius:8px; padding:40px; text-align:center; cursor:pointer; margin-bottom:16px;"
+               onclick="document.getElementById('import-file-input').click()">
+            <div style="font-size:2rem; margin-bottom:8px;">&#128194;</div>
+            <div style="color:#374151; font-weight:600;">Klik untuk memilih</div>
+            <div style="color:#64748b; font-size:0.88rem; margin-top:4px;">atau drag &amp; drop file Excel (.xlsx / .xls)</div>
+          </div>
+          <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleImportFile(event)">
+          <div id="import-alert-ok" class="alert alert--success hidden"></div>
+          <div id="import-alert-err" class="alert alert--error hidden"></div>
+          <div id="import-preview" class="hidden">
+            <div class="table-wrapper" style="overflow-x:auto; margin-bottom:16px;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>#</th><th>ProductCode</th><th>ProductName</th><th>SKU</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="import-preview-tbody"></tbody>
+              </table>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+              <button class="btn btn--secondary" onclick="resetImport()">Bersihkan</button>
+              <button class="btn btn--primary" id="btn-validate-import" onclick="startImport()">Upload &amp; Validate</button>
+              <button class="btn btn--success hidden" id="btn-commit-import" onclick="commitImport()">Commit Import</button>
+            </div>
           </div>
         </div>
 
@@ -271,6 +314,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/utils.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 var allOrdos    = []
@@ -285,6 +329,8 @@ var editingBrandId  = null
 var editingFamilyId = null
 var editingGenusId  = null
 var editingCodeId   = null
+var importRows      = []
+var importJobId     = null
 
 FCOS.initPage().then(function (user) {
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
@@ -815,6 +861,181 @@ function hideErr(id) {
   var el = document.getElementById(id)
   el.textContent = ''
   el.classList.add('hidden')
+}
+
+// ── IMPORT EXCEL ──────────────────────────────────────────
+var impDZ = document.getElementById('import-zone')
+impDZ.addEventListener('dragover', function (e) { e.preventDefault(); impDZ.style.borderColor='#1a56db'; impDZ.style.background='#eff6ff' })
+impDZ.addEventListener('dragleave', function () { impDZ.style.borderColor='#cbd5e1'; impDZ.style.background='' })
+impDZ.addEventListener('drop', function (e) {
+  e.preventDefault(); impDZ.style.borderColor='#cbd5e1'; impDZ.style.background=''
+  var f = e.dataTransfer.files[0]; if (f) processImportFile(f)
+})
+
+function handleImportFile(e) { var f = e.target.files[0]; if (f) processImportFile(f) }
+
+function processImportFile(file) {
+  var reader = new FileReader()
+  reader.onload = function (e) {
+    try {
+      var wb  = XLSX.read(e.target.result, { type: 'binary' })
+      var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      parseAndPreview(raw)
+    } catch (err) {
+      showImportErr('Gagal membaca file: ' + err.message)
+    }
+  }
+  reader.readAsBinaryString(file)
+}
+
+function parseAndPreview(raw) {
+  importRows = []
+  importJobId = null
+  hideImportAlerts()
+  document.getElementById('import-preview').classList.add('hidden')
+  if (!raw.length) { showImportErr('File kosong.'); return }
+  var norm = raw.map(function (row) {
+    var o = {}
+    Object.keys(row).forEach(function (k) { o[k.trim().toLowerCase()] = row[k] })
+    return o
+  })
+  if (!('productcode' in norm[0]) || !('productname' in norm[0]) || !('sku' in norm[0])) {
+    showImportErr('Kolom wajib tidak ditemukan: ProductCode, ProductName, SKU')
+    return
+  }
+  var rows = [], errors = []
+  norm.forEach(function (r, i) {
+    var pc  = String(r['productcode']  || '').trim()
+    var pn  = String(r['productname']  || '').trim()
+    var sku = String(r['sku']          || '').trim()
+    if (!pc)  { errors.push('Baris ' + (i+2) + ': ProductCode kosong'); return }
+    if (!pn)  { errors.push('Baris ' + (i+2) + ': ProductName kosong'); return }
+    if (!sku) { errors.push('Baris ' + (i+2) + ': SKU kosong'); return }
+    rows.push({ product_code: pc, product_name: pn, sku: sku })
+  })
+  if (errors.length) {
+    showImportErr(errors.length + ' baris bermasalah:\n' +
+      errors.slice(0, 10).join('\n') +
+      (errors.length > 10 ? '\n... dan ' + (errors.length - 10) + ' lainnya' : ''))
+  }
+  if (!rows.length) return
+  if (rows.length > 500) { showImportErr('Maksimum 500 baris. File ini mengandung ' + rows.length + ' baris.'); return }
+  importRows = rows
+  showImportOk(rows.length + ' baris siap di-upload.')
+  renderImportPreview(rows, null)
+  document.getElementById('btn-validate-import').classList.remove('hidden')
+  document.getElementById('btn-commit-import').classList.add('hidden')
+  document.getElementById('import-preview').classList.remove('hidden')
+}
+
+function renderImportPreview(rows, validated) {
+  var src = validated || rows
+  document.getElementById('import-preview-tbody').innerHTML = src.map(function (r, i) {
+    var vs = r.validation_status
+    var badge = vs
+      ? importBadge(vs, r.conflict_reason || r.error_reason || '')
+      : '<span style="font-size:0.75rem; background:#e0e7ff; color:#3730a3; padding:2px 8px; border-radius:4px; font-weight:600;">Parsed</span>'
+    return '<tr>' +
+      '<td>' + (i+1) + '</td>' +
+      '<td><strong>' + escHtml(r.product_code) + '</strong></td>' +
+      '<td>' + escHtml(r.product_name) + '</td>' +
+      '<td>' + escHtml(r.sku) + '</td>' +
+      '<td>' + badge + '</td></tr>'
+  }).join('')
+}
+
+function importBadge(status, reason) {
+  var c = { OK:'background:#dcfce7;color:#166534;', CONFLICT:'background:#fef9c3;color:#854d0e;', ERROR:'background:#fee2e2;color:#991b1b;' }
+  var s = c[status] || 'background:#f1f5f9;color:#475569;'
+  var h = '<span style="font-size:0.75rem;' + s + 'padding:2px 8px;border-radius:4px;font-weight:600;">' + escHtml(status) + '</span>'
+  if (reason) h += '<div style="font-size:0.75rem;color:#64748b;margin-top:2px;">' + escHtml(reason) + '</div>'
+  return h
+}
+
+async function startImport() {
+  var btn = document.getElementById('btn-validate-import')
+  hideImportAlerts()
+  FCOS.setLoading(btn, 'Processing...')
+  try {
+    var jobRes = await FCOS.api('createImportJob', 'POST', { file_type: 'PRODUCT' })
+    importJobId = jobRes.job_id
+    await FCOS.api('submitImportRows', 'POST', { job_id: importJobId, rows: importRows })
+    var valRes = await FCOS.api('validateImportJob', 'POST', { job_id: importJobId })
+    if (valRes.rows && valRes.rows.length) {
+      renderImportPreview(importRows, valRes.rows)
+      var ok = valRes.rows.filter(function(r){ return r.validation_status === 'OK' }).length
+      var co = valRes.rows.filter(function(r){ return r.validation_status === 'CONFLICT' }).length
+      var er = valRes.rows.filter(function(r){ return r.validation_status === 'ERROR' }).length
+      var msg = 'Validasi selesai: ' + ok + ' OK'
+      if (co) msg += ', ' + co + ' CONFLICT'
+      if (er) msg += ', ' + er + ' ERROR'
+      showImportOk(msg)
+      if (ok > 0) {
+        document.getElementById('btn-validate-import').classList.add('hidden')
+        document.getElementById('btn-commit-import').classList.remove('hidden')
+      } else {
+        showImportErr('Tidak ada baris yang bisa di-commit.')
+      }
+    } else {
+      showImportOk('Validasi selesai. Status: ' + (valRes.status || 'VALIDATED'))
+      document.getElementById('btn-validate-import').classList.add('hidden')
+      document.getElementById('btn-commit-import').classList.remove('hidden')
+    }
+  } catch (err) {
+    showImportErr('Gagal: ' + err.message + (importJobId ? '\nJob ID: ' + importJobId : ''))
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+}
+
+async function commitImport() {
+  if (!importJobId) return
+  var btn = document.getElementById('btn-commit-import')
+  hideImportAlerts()
+  FCOS.setLoading(btn, 'Committing...')
+  try {
+    var res = await FCOS.api('commitImportJob', 'POST', { job_id: importJobId })
+    var msg = 'Import selesai!'
+    if (res.committed_rows !== undefined) msg += ' ' + res.committed_rows + ' baris di-commit.'
+    if (res.skipped_rows) msg += ' ' + res.skipped_rows + ' baris di-skip.'
+    showImportOk(msg)
+    document.getElementById('btn-commit-import').classList.add('hidden')
+    loadAll()
+  } catch (err) {
+    showImportErr('Gagal commit: ' + err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+}
+
+function resetImport() {
+  importRows = []; importJobId = null
+  hideImportAlerts()
+  document.getElementById('import-preview').classList.add('hidden')
+  document.getElementById('import-file-input').value = ''
+}
+
+function downloadProductTemplate() {
+  var rows = [
+    { ProductCode: '60012345', ProductName: 'RENOLIN CLP 220 20L', SKU: 'REN-CLP220-20L' },
+    { ProductCode: '60012346', ProductName: 'RENOLIN CLP 320 20L', SKU: 'REN-CLP320-20L' }
+  ]
+  var ws = XLSX.utils.json_to_sheet(rows)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Products')
+  XLSX.writeFile(wb, 'Product_Import_Template.xlsx')
+}
+
+function showImportOk(msg) {
+  var el = document.getElementById('import-alert-ok')
+  el.style.whiteSpace = 'pre-line'; el.textContent = msg; el.classList.remove('hidden')
+}
+function showImportErr(msg) {
+  var el = document.getElementById('import-alert-err')
+  el.style.whiteSpace = 'pre-line'; el.textContent = msg; el.classList.remove('hidden')
+}
+function hideImportAlerts() {
+  hideErr('import-alert-ok'); hideErr('import-alert-err')
 }
 </script>
 
