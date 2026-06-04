@@ -6,13 +6,14 @@ const { requireAuth, requireActive, requireRole } = require('./middleware')
 const { writeAudit } = require('./audit')
 const {
   AUDIT, PRODUCT_STATUS,
-  IMPORT_JOB_STATUS, IMPORT_FILE_TYPE, VALIDATION_STATUS, USER_DECISION,
+  IMPORT_JOB_STATUS, IMPORT_FILE_TYPE, IMPORT_MODULE_NAME, IMPORT_PRIMARY_KEY_FIELD,
+  VALIDATION_STATUS, USER_DECISION,
   COMMIT_STATUS, CLEANUP_STATUS
 } = require('./constants')
 
 const FieldValue = admin.firestore.FieldValue
 
-// ─── run helper ──────────────────────────────────────────
+// run helper
 function run(middlewares, handler) {
   return onRequest(async (req, res) => {
     let idx = 0
@@ -29,7 +30,7 @@ function run(middlewares, handler) {
   })
 }
 
-// ─── nextId: single-use (non-import paths) ───────────────
+// nextId
 async function nextId(seqName, prefix, padLen) {
   const ref = db.collection('_sequences').doc(seqName)
   const id  = await db.runTransaction(async tx => {
@@ -41,11 +42,7 @@ async function nextId(seqName, prefix, padLen) {
   return prefix + String(id).padStart(padLen, '0')
 }
 
-// ─── reserveIds: block allocation for bulk import ────────
-// One transaction reserves N IDs atomically.
-// Returns array of formatted ID strings.
-// Example: reserveIds('products','PRD-',6,500)
-//   → ['PRD-000001','PRD-000002',...,'PRD-000500']
+// reserveIds
 async function reserveIds(seqName, prefix, padLen, count) {
   const ref = db.collection('_sequences').doc(seqName)
   const start = await db.runTransaction(async tx => {
@@ -61,48 +58,195 @@ async function reserveIds(seqName, prefix, padLen, count) {
   return ids
 }
 
-// ─── RETENTION: 90 days from now ─────────────────────────
+// expiresAt: 90 days
 function expiresAt() {
   const d = new Date()
   d.setDate(d.getDate() + 90)
   return d
 }
 
-// ═══════════════════════════════════════════════════════════
+// DISPATCH: extractFields
+function extractFields(file_type, row) {
+  if (file_type === IMPORT_FILE_TYPE.PRODUCT) {
+    const product_code = (row.product_code || '').trim()
+    const product_name = (row.product_name || '').trim()
+    const sku          = (row.sku          || '').trim() || null
+    return { primary_key: product_code, fields: { product_code, product_name, sku } }
+  }
+  if (file_type === IMPORT_FILE_TYPE.CUSTOMER) {
+    const customerCode = (row.customerCode || '').trim()
+    const customerName = (row.customerName || '').trim()
+    return { primary_key: customerCode, fields: { customerCode, customerName } }
+  }
+  if (file_type === IMPORT_FILE_TYPE.SHIP_TO) {
+    const shipToCode = (row.shipToCode || '').trim()
+    const soldToCode = (row.soldToCode  || '').trim()
+    return { primary_key: shipToCode, fields: { shipToCode, soldToCode } }
+  }
+  throw new Error(`extractFields: unknown file_type ${file_type}`)
+}
+
+// DISPATCH: validateProduct
+async function validateProduct(stagingRows, db) {
+  const registrySnap = await db.collection('product_registry').get()
+  const registryByCode = {}
+  const registryNameSet = new Set()
+  registrySnap.docs.forEach(d => {
+    const data = d.data()
+    if (data.product_code) {
+      registryByCode[data.product_code.trim()] = {
+        product_id        : d.id,
+        product_name_lower: data.product_name_lower || ''
+      }
+    }
+    if (data.product_name_lower) registryNameSet.add(data.product_name_lower)
+  })
+  const seenCodesInFile = {}
+  let valid_rows = 0, conflict_rows = 0, error_rows = 0
+  const results = []
+  for (const row of stagingRows) {
+    const errors = []
+    let conflictType = null, conflictWith = null, similarWarn = false
+    const code      = (row.fields && row.fields.product_code || row.product_code || '').trim()
+    const name      = (row.fields && row.fields.product_name || row.product_name || '').trim()
+    const nameLower = name.toLowerCase()
+    if (!code) errors.push('product_code_required')
+    if (!name) errors.push('product_name_required')
+    if (code && seenCodesInFile[code] !== undefined) {
+      errors.push('duplicate_code_in_file')
+    } else if (code) {
+      seenCodesInFile[code] = row.row_number
+    }
+    if (errors.length === 0 && registryByCode[code]) {
+      conflictType = 'DUPLICATE_CODE_IN_REGISTRY'
+      conflictWith = registryByCode[code].product_id
+    }
+    if (errors.length === 0 && nameLower) {
+      for (const existingName of registryNameSet) {
+        if (existingName !== nameLower &&
+            (existingName.includes(nameLower) || nameLower.includes(existingName))) {
+          similarWarn = true; break
+        }
+      }
+    }
+    let vstatus
+    if (errors.length > 0)  { vstatus = VALIDATION_STATUS.ERROR;    error_rows++ }
+    else if (conflictType)  { vstatus = VALIDATION_STATUS.CONFLICT;  conflict_rows++ }
+    else                    { vstatus = VALIDATION_STATUS.OK;        valid_rows++ }
+    results.push({ _ref: row._ref, validation_status: vstatus, validation_errors: errors,
+                   conflict_type: conflictType, conflict_with: conflictWith,
+                   similar_name_warning: similarWarn })
+  }
+  return { results, valid_rows, conflict_rows, error_rows }
+}
+
+// DISPATCH: validateCustomer -- STUB (Package 5B)
+async function validateCustomer(_stagingRows, _db) {
+  throw new Error('NOT_IMPLEMENTED: validateCustomer will be built in Package 5B')
+}
+
+// DISPATCH: validateShipTo -- STUB (Package 5C)
+async function validateShipTo(_stagingRows, _db) {
+  throw new Error('NOT_IMPLEMENTED: validateShipTo will be built in Package 5C')
+}
+
+// DISPATCH: commitProduct
+async function commitProduct(row, batch, reservedId, userId, jobId) {
+  if (row.validation_status === VALIDATION_STATUS.ERROR) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'error_skipped'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT && row.user_decision === USER_DECISION.SKIP) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'skipped'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT && row.user_decision === USER_DECISION.MANUAL_REVIEW) {
+    return 'manual_review'
+  }
+  if (row.validation_status === VALIDATION_STATUS.OK) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
+    const product_id = reservedId
+    const f = row.fields || {}
+    batch.set(db.collection('product_registry').doc(product_id), {
+      product_id,
+      product_code        : f.product_code        || row.product_code,
+      product_name        : f.product_name        || row.product_name,
+      product_name_lower  : (f.product_name || row.product_name || '').toLowerCase().trim(),
+      sku                 : f.sku !== undefined ? f.sku : (row.sku || null),
+      status              : PRODUCT_STATUS.ACTIVE,
+      import_job_id       : jobId,
+      taxonomy_ordo_id    : null,
+      taxonomy_family_id  : null,
+      taxonomy_genus_id   : null,
+      taxonomy_species_id : null,
+      created_at          : FieldValue.serverTimestamp(),
+      updated_at          : FieldValue.serverTimestamp(),
+      created_by          : userId,
+      updated_by          : userId
+    })
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'inserted'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT &&
+      row.user_decision === USER_DECISION.UPDATE && row.conflict_with) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
+    const f = row.fields || {}
+    batch.update(db.collection('product_registry').doc(row.conflict_with), {
+      product_code       : f.product_code        || row.product_code,
+      product_name       : f.product_name        || row.product_name,
+      product_name_lower : (f.product_name || row.product_name || '').toLowerCase().trim(),
+      sku                : f.sku !== undefined ? f.sku : (row.sku || null),
+      import_job_id      : jobId,
+      updated_at         : FieldValue.serverTimestamp(),
+      updated_by         : userId
+    })
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'updated'
+  }
+  return 'error_skipped'
+}
+
+// DISPATCH: commitCustomer -- STUB (Package 5B)
+async function commitCustomer(_row, _batch, _reservedId, _userId, _jobId) {
+  throw new Error('NOT_IMPLEMENTED: commitCustomer will be built in Package 5B')
+}
+
+// DISPATCH: commitShipTo -- STUB (Package 5C)
+async function commitShipTo(_row, _batch, _reservedId, _userId, _jobId) {
+  throw new Error('NOT_IMPLEMENTED: commitShipTo will be built in Package 5C')
+}
+
 // createImportJob
-// POST { file_name, file_type, total_rows }
-// ═══════════════════════════════════════════════════════════
 exports.createImportJob = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const { file_name, file_type, total_rows } = req.body
-
-    if (!file_name)
-      return res.status(400).json({ error: 'file_name is required' })
+    if (!file_name) return res.status(400).json({ error: 'file_name is required' })
     if (!IMPORT_FILE_TYPE[file_type])
       return res.status(400).json({ error: `Invalid file_type. Must be: ${Object.keys(IMPORT_FILE_TYPE).join(', ')}` })
     if (!total_rows || total_rows < 1)
       return res.status(400).json({ error: 'total_rows must be >= 1' })
-
     try {
       const job_id = await nextId('import_jobs', 'IMP-', 6)
       await db.collection('import_jobs').doc(job_id).set({
         job_id,
-        status         : IMPORT_JOB_STATUS.PENDING,
+        status          : IMPORT_JOB_STATUS.PENDING,
         file_name,
         file_type,
-        import_source  : file_type,
+        module          : IMPORT_MODULE_NAME[file_type] || file_type,
+        import_source   : file_type,
         total_rows,
-        valid_rows     : 0,
-        conflict_rows  : 0,
-        error_rows     : 0,
-        staged_rows    : 0,
-        created_by     : req.user.uid,
-        created_at     : FieldValue.serverTimestamp(),
-        updated_at     : FieldValue.serverTimestamp(),
-        committed_at   : null,
-        committed_by   : null
+        valid_rows      : 0,
+        conflict_rows   : 0,
+        error_rows      : 0,
+        staged_rows     : 0,
+        created_by      : req.user.uid,
+        created_by_name : req.user.name || req.user.email || req.user.uid,
+        created_at      : FieldValue.serverTimestamp(),
+        updated_at      : FieldValue.serverTimestamp(),
+        committed_at    : null,
+        committed_by    : null
       })
       await writeAudit(AUDIT.IMPORT_JOB_CREATED, req.user.uid, job_id, { file_name, file_type, total_rows })
       return res.status(201).json({ ok: true, job_id })
@@ -113,79 +257,62 @@ exports.createImportJob = run(
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // submitImportRows
-// POST { job_id, rows: [...] }
-// Frontend sends chunks of 250. Hard cap 300 per request.
-// Staging docs written with commit_status=PENDING,
-// expires_at=now+90d, cleanup_status=ACTIVE.
-// ═══════════════════════════════════════════════════════════
 exports.submitImportRows = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const { job_id, rows } = req.body
-
-    if (!job_id)
-      return res.status(400).json({ error: 'job_id is required' })
-    if (!Array.isArray(rows) || rows.length === 0)
-      return res.status(400).json({ error: 'rows must be a non-empty array' })
-    if (rows.length > 300)
-      return res.status(400).json({ error: 'Max 300 rows per chunk' })
-
+    if (!job_id) return res.status(400).json({ error: 'job_id is required' })
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows must be a non-empty array' })
+    if (rows.length > 300) return res.status(400).json({ error: 'Max 300 rows per chunk' })
     try {
       const jobSnap = await db.collection('import_jobs').doc(job_id).get()
-      if (!jobSnap.exists)
-        return res.status(404).json({ error: 'Import job not found' })
+      if (!jobSnap.exists) return res.status(404).json({ error: 'Import job not found' })
       const job = jobSnap.data()
       if (job.status !== IMPORT_JOB_STATUS.PENDING && job.status !== IMPORT_JOB_STATUS.STAGED)
         return res.status(400).json({ error: `Cannot submit rows to a job with status: ${job.status}` })
-      if (job.created_by !== req.user.uid)
-        return res.status(403).json({ error: 'You do not own this import job' })
-
-      // Reserve staging IDs in one transaction (block allocation)
+      if (job.created_by !== req.user.uid) return res.status(403).json({ error: 'You do not own this import job' })
       const stagingIds = await reserveIds('import_staging', 'STG-', 8, rows.length)
-
       const expiry = expiresAt()
-
-      // Batch write: max rows.length (≤300) + 1 job update = ≤301 — well under 500 limit
-      const batch = db.batch()
-
+      const batch  = db.batch()
       rows.forEach((row, i) => {
-        const { row_number, product_code, product_name, sku, raw_row } = row
+        const { primary_key, fields } = extractFields(job.file_type, row)
+        const primary_key_field = IMPORT_PRIMARY_KEY_FIELD[job.file_type] || 'primary_key'
         const ref = db.collection('import_staging').doc(stagingIds[i])
         batch.set(ref, {
-          staging_id          : stagingIds[i],
+          staging_id           : stagingIds[i],
           job_id,
-          row_number          : row_number || 0,
-          raw_row             : raw_row || {},
-          product_code        : (product_code || '').trim(),
-          product_name        : (product_name || '').trim(),
-          sku                 : (sku || '').trim() || null,
-          validation_status   : VALIDATION_STATUS.OK,
-          validation_errors   : [],
-          conflict_type       : null,
-          conflict_with       : null,
-          similar_name_warning: false,
-          user_decision       : null,
-          decided_at          : null,
-          decided_by          : null,
-          // Idempotency fields
-          commit_status       : COMMIT_STATUS.PENDING,
-          committed_at        : null,
-          // Cleanup / retention fields
-          cleanup_status      : CLEANUP_STATUS.ACTIVE,
-          expires_at          : expiry,
-          created_at          : FieldValue.serverTimestamp()
+          row_number           : row.row_number || 0,
+          raw_row              : row.raw_row || {},
+          primary_key,
+          primary_key_field,
+          fields,
+          ...(job.file_type === IMPORT_FILE_TYPE.PRODUCT ? {
+            product_code : fields.product_code,
+            product_name : fields.product_name,
+            sku          : fields.sku
+          } : {}),
+          validation_status    : VALIDATION_STATUS.OK,
+          validation_errors    : [],
+          conflict_type        : null,
+          conflict_with        : null,
+          similar_name_warning : false,
+          user_decision        : null,
+          decided_at           : null,
+          decided_by           : null,
+          commit_status        : COMMIT_STATUS.PENDING,
+          committed_at         : null,
+          cleanup_status       : CLEANUP_STATUS.ACTIVE,
+          expires_at           : expiry,
+          created_at           : FieldValue.serverTimestamp()
         })
       })
-
       batch.update(db.collection('import_jobs').doc(job_id), {
         staged_rows : FieldValue.increment(rows.length),
         status      : IMPORT_JOB_STATUS.STAGED,
         updated_at  : FieldValue.serverTimestamp()
       })
-
       await batch.commit()
       return res.status(200).json({ ok: true, staged: rows.length })
     } catch (err) {
@@ -195,153 +322,81 @@ exports.submitImportRows = run(
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // validateImportJob
-// POST { job_id }
-// Loads all staging rows, runs validation + conflict detection.
-// Resets commit_status to PENDING on re-validation.
-// ═══════════════════════════════════════════════════════════
 exports.validateImportJob = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const { job_id } = req.body
     if (!job_id) return res.status(400).json({ error: 'job_id is required' })
-
     try {
       const jobSnap = await db.collection('import_jobs').doc(job_id).get()
       if (!jobSnap.exists) return res.status(404).json({ error: 'Import job not found' })
       const job = jobSnap.data()
-      if (job.created_by !== req.user.uid)
-        return res.status(403).json({ error: 'You do not own this import job' })
+      if (job.created_by !== req.user.uid) return res.status(403).json({ error: 'You do not own this import job' })
       if (job.status !== IMPORT_JOB_STATUS.STAGED)
         return res.status(400).json({ error: `Job must be STAGED to validate. Current: ${job.status}` })
-
-      // Load all staging rows for this job across all chunks
       const stagingSnap = await db.collection('import_staging')
-        .where('job_id', '==', job_id)
-        .orderBy('row_number')
-        .get()
+        .where('job_id', '==', job_id).orderBy('row_number').get()
       const stagingRows = stagingSnap.docs.map(d => ({ _ref: d.ref, ...d.data() }))
-
-      // Load all existing products for conflict detection
-      const registrySnap = await db.collection('product_registry').get()
-      const registryByCode = {}
-      const registryNameSet = new Set()
-      registrySnap.docs.forEach(d => {
-        const data = d.data()
-        if (data.product_code) {
-          registryByCode[data.product_code.trim()] = {
-            product_id        : d.id,
-            product_name_lower: data.product_name_lower || ''
-          }
-        }
-        if (data.product_name_lower) registryNameSet.add(data.product_name_lower)
-      })
-
-      // Track codes seen within this file (cross-chunk duplicate detection)
-      const seenCodesInFile = {}
-
-      let valid_rows    = 0
-      let conflict_rows = 0
-      let error_rows    = 0
-
-      const BATCH_SIZE = 400
-      let currentBatch = db.batch()
-      let batchCount   = 0
-
-      const flushBatch = async () => {
-        if (batchCount > 0) {
-          await currentBatch.commit()
-          currentBatch = db.batch()
-          batchCount   = 0
-        }
+      let validationResult
+      if (job.file_type === IMPORT_FILE_TYPE.PRODUCT) {
+        validationResult = await validateProduct(stagingRows, db)
+      } else if (job.file_type === IMPORT_FILE_TYPE.CUSTOMER) {
+        validationResult = await validateCustomer(stagingRows, db)
+      } else if (job.file_type === IMPORT_FILE_TYPE.SHIP_TO) {
+        validationResult = await validateShipTo(stagingRows, db)
+      } else {
+        return res.status(400).json({ error: `Unknown file_type: ${job.file_type}` })
       }
-
-      for (const row of stagingRows) {
-        const errors       = []
-        let   conflictType = null
-        let   conflictWith = null
-        let   similarWarn  = false
-
-        const code      = (row.product_code || '').trim()
-        const name      = (row.product_name || '').trim()
-        const nameLower = name.toLowerCase()
-
-        // ERROR rules
-        if (!code)  errors.push('product_code_required')
-        if (!name)  errors.push('product_name_required')
-
-        if (code && seenCodesInFile[code] !== undefined) {
-          errors.push('duplicate_code_in_file')
-        } else if (code) {
-          seenCodesInFile[code] = row.row_number
-        }
-
-        // CONFLICT rule (exact match only — no fuzzy)
-        if (errors.length === 0 && registryByCode[code]) {
-          conflictType = 'DUPLICATE_CODE_IN_REGISTRY'
-          conflictWith = registryByCode[code].product_id
-        }
-
-        // WARNING only — similar name (never blocks, never requires action)
-        if (errors.length === 0 && nameLower) {
-          for (const existingName of registryNameSet) {
-            if (existingName !== nameLower &&
-                (existingName.includes(nameLower) || nameLower.includes(existingName))) {
-              similarWarn = true
-              break
-            }
-          }
-        }
-
-        let vstatus
-        if (errors.length > 0)  { vstatus = VALIDATION_STATUS.ERROR;    error_rows++ }
-        else if (conflictType)  { vstatus = VALIDATION_STATUS.CONFLICT;  conflict_rows++ }
-        else                    { vstatus = VALIDATION_STATUS.OK;        valid_rows++ }
-
-        currentBatch.update(row._ref, {
-          validation_status   : vstatus,
-          validation_errors   : errors,
-          conflict_type       : conflictType,
-          conflict_with       : conflictWith,
-          similar_name_warning: similarWarn,
-          // Reset decisions and commit_status on re-validation
-          user_decision       : null,
-          decided_at          : null,
-          decided_by          : null,
-          commit_status       : COMMIT_STATUS.PENDING,
-          committed_at        : null
+      const { results, valid_rows, conflict_rows, error_rows } = validationResult
+      const BATCH_SIZE = 400
+      let currentBatch = db.batch(), batchCount = 0
+      const flushBatch = async () => {
+        if (batchCount > 0) { await currentBatch.commit(); currentBatch = db.batch(); batchCount = 0 }
+      }
+      for (const result of results) {
+        currentBatch.update(result._ref, {
+          validation_status    : result.validation_status,
+          validation_errors    : result.validation_errors,
+          conflict_type        : result.conflict_type,
+          conflict_with        : result.conflict_with,
+          similar_name_warning : result.similar_name_warning || false,
+          user_decision        : null,
+          decided_at           : null,
+          decided_by           : null,
+          commit_status        : COMMIT_STATUS.PENDING,
+          committed_at         : null
         })
         batchCount++
         if (batchCount >= BATCH_SIZE) await flushBatch()
       }
-
       await flushBatch()
-
       await db.collection('import_jobs').doc(job_id).update({
-        status        : IMPORT_JOB_STATUS.VALIDATED,
+        status       : IMPORT_JOB_STATUS.VALIDATED,
         valid_rows,
         conflict_rows,
         error_rows,
-        updated_at    : FieldValue.serverTimestamp()
+        validated_at : FieldValue.serverTimestamp(),
+        updated_at   : FieldValue.serverTimestamp()
       })
-
-      return res.status(200).json({
-        ok: true,
-        summary: { total: stagingRows.length, valid_rows, conflict_rows, error_rows }
-      })
+      return res.status(200).json({ ok: true, summary: { total: stagingRows.length, valid_rows, conflict_rows, error_rows } })
     } catch (err) {
       console.error('[import] validateImportJob:', err)
+      try {
+        await db.collection('import_jobs').doc(job_id).update({
+          status        : IMPORT_JOB_STATUS.FAILED,
+          failed_at     : FieldValue.serverTimestamp(),
+          failed_reason : err.message || 'Unknown error during validation',
+          updated_at    : FieldValue.serverTimestamp()
+        })
+      } catch (_) {}
       return res.status(500).json({ error: 'Internal error' })
     }
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // getImportJob
-// GET ?job_id=IMP-000001
-// ═══════════════════════════════════════════════════════════
 exports.getImportJob = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
@@ -351,13 +406,9 @@ exports.getImportJob = run(
     try {
       const jobSnap = await db.collection('import_jobs').doc(job_id).get()
       if (!jobSnap.exists) return res.status(404).json({ error: 'Import job not found' })
-
       const stagingSnap = await db.collection('import_staging')
-        .where('job_id', '==', job_id)
-        .orderBy('row_number')
-        .get()
+        .where('job_id', '==', job_id).orderBy('row_number').get()
       const rows = stagingSnap.docs.map(d => d.data())
-
       return res.status(200).json({ job: { job_id: jobSnap.id, ...jobSnap.data() }, rows })
     } catch (err) {
       console.error('[import] getImportJob:', err)
@@ -366,20 +417,21 @@ exports.getImportJob = run(
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // listImportJobs
-// GET ?limit=50
-// ═══════════════════════════════════════════════════════════
 exports.listImportJobs = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
     try {
-      const limit = Math.min(parseInt(req.query.limit || '50', 10), 100)
-      const snap = await db.collection('import_jobs')
-        .orderBy('created_at', 'desc')
-        .limit(limit)
-        .get()
+      const limit     = Math.min(parseInt(req.query.limit || '50', 10), 100)
+      const file_type = req.query.file_type || null
+      let q = db.collection('import_jobs').orderBy('created_at', 'desc')
+      if (file_type) {
+        if (!IMPORT_FILE_TYPE[file_type]) return res.status(400).json({ error: `Invalid file_type: ${file_type}` })
+        q = q.where('file_type', '==', file_type)
+      }
+      q = q.limit(limit)
+      const snap = await q.get()
       return res.status(200).json({ jobs: snap.docs.map(d => ({ job_id: d.id, ...d.data() })) })
     } catch (err) {
       console.error('[import] listImportJobs:', err)
@@ -388,10 +440,7 @@ exports.listImportJobs = run(
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // setRowDecision
-// POST { staging_id, decision: SKIP | UPDATE | MANUAL_REVIEW }
-// ═══════════════════════════════════════════════════════════
 exports.setRowDecision = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
@@ -400,27 +449,19 @@ exports.setRowDecision = run(
     if (!staging_id) return res.status(400).json({ error: 'staging_id is required' })
     if (!USER_DECISION[decision])
       return res.status(400).json({ error: `Invalid decision. Must be: ${Object.keys(USER_DECISION).join(', ')}` })
-
     try {
       const ref  = db.collection('import_staging').doc(staging_id)
       const snap = await ref.get()
       if (!snap.exists) return res.status(404).json({ error: 'Staging row not found' })
-
       const row = snap.data()
       if (row.validation_status === VALIDATION_STATUS.ERROR)
         return res.status(400).json({ error: 'Cannot set decision on ERROR rows' })
       if (row.commit_status === COMMIT_STATUS.COMMITTED)
         return res.status(400).json({ error: 'Row is already committed' })
-
       const jobSnap = await db.collection('import_jobs').doc(row.job_id).get()
       if (!jobSnap.exists || jobSnap.data().created_by !== req.user.uid)
         return res.status(403).json({ error: 'You do not own this import job' })
-
-      await ref.update({
-        user_decision : decision,
-        decided_at    : FieldValue.serverTimestamp(),
-        decided_by    : req.user.uid
-      })
+      await ref.update({ user_decision: decision, decided_at: FieldValue.serverTimestamp(), decided_by: req.user.uid })
       return res.status(200).json({ ok: true })
     } catch (err) {
       console.error('[import] setRowDecision:', err)
@@ -429,240 +470,93 @@ exports.setRowDecision = run(
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // commitImportJob
-// POST { job_id }
-//
-// IDEMPOTENCY DESIGN:
-//   - Only processes rows where commit_status = PENDING
-//   - Each row is marked PROCESSING before write, COMMITTED after
-//   - If crash: re-run skips COMMITTED rows, retries PROCESSING rows
-//   - PROCESSING rows on re-run are treated as PENDING (safe retry)
-//
-// BATCH DESIGN:
-//   - Reserve all needed product IDs in ONE block allocation
-//   - No sequential nextId() per row
-//   - Sub-batches of 400 writes each
-//
-// PARTIAL COMMIT:
-//   - MANUAL_REVIEW rows → left as PENDING, job = PARTIALLY_COMMITTED
-//   - ERROR rows → always skipped
-// ═══════════════════════════════════════════════════════════
 exports.commitImportJob = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const { job_id } = req.body
     if (!job_id) return res.status(400).json({ error: 'job_id is required' })
-
     try {
       const jobSnap = await db.collection('import_jobs').doc(job_id).get()
       if (!jobSnap.exists) return res.status(404).json({ error: 'Import job not found' })
       const job = jobSnap.data()
-      if (job.created_by !== req.user.uid)
-        return res.status(403).json({ error: 'You do not own this import job' })
+      if (job.created_by !== req.user.uid) return res.status(403).json({ error: 'You do not own this import job' })
       if (![IMPORT_JOB_STATUS.VALIDATED, IMPORT_JOB_STATUS.PARTIALLY_COMMITTED].includes(job.status))
         return res.status(400).json({ error: `Job must be VALIDATED to commit. Current: ${job.status}` })
-
-      // Load all staging rows — only process PENDING and PROCESSING
-      // (PROCESSING = crashed mid-commit last time, safe to retry)
       const stagingSnap = await db.collection('import_staging')
-        .where('job_id', '==', job_id)
-        .orderBy('row_number')
-        .get()
+        .where('job_id', '==', job_id).orderBy('row_number').get()
       const allRows = stagingSnap.docs.map(d => ({ _ref: d.ref, ...d.data() }))
-
-      // Filter to rows that need processing (skip already COMMITTED)
       const pendingRows = allRows.filter(r =>
-        r.commit_status === COMMIT_STATUS.PENDING ||
-        r.commit_status === COMMIT_STATUS.PROCESSING
-      )
-
-      // Check for CONFLICT rows with no decision
+        r.commit_status === COMMIT_STATUS.PENDING || r.commit_status === COMMIT_STATUS.PROCESSING)
       const unresolved = pendingRows.filter(r =>
-        r.validation_status === VALIDATION_STATUS.CONFLICT && !r.user_decision
-      )
-      if (unresolved.length > 0) {
-        return res.status(400).json({
-          error            : 'Unresolved conflicts exist. Set a decision for all conflict rows before committing.',
-          unresolved_count : unresolved.length
-        })
-      }
-
-      // Count how many OK inserts we need — reserve IDs in ONE block allocation
-      const insertRows = pendingRows.filter(r =>
-        r.validation_status === VALIDATION_STATUS.OK
-      )
-      const reservedIds = insertRows.length > 0
-        ? await reserveIds('products', 'PRD-', 6, insertRows.length)
-        : []
+        r.validation_status === VALIDATION_STATUS.CONFLICT && !r.user_decision)
+      if (unresolved.length > 0)
+        return res.status(400).json({ error: 'Unresolved conflicts exist.', unresolved_count: unresolved.length })
+      const insertRows = pendingRows.filter(r => r.validation_status === VALIDATION_STATUS.OK)
+      let reservedIds = []
+      if (insertRows.length > 0 && job.file_type === IMPORT_FILE_TYPE.PRODUCT)
+        reservedIds = await reserveIds('products', 'PRD-', 6, insertRows.length)
       let idIndex = 0
-
-      let inserted      = 0
-      let updated       = 0
-      let skipped       = 0
-      let manual_review = 0
-      let errors_skipped = 0
-
-      const BATCH_SIZE  = 400
-      let currentBatch  = db.batch()
-      let batchCount    = 0
-
+      let inserted = 0, updated = 0, skipped = 0, manual_review = 0, errors_skipped = 0
+      const BATCH_SIZE = 400
+      let currentBatch = db.batch(), batchCount = 0
       const flushBatch = async () => {
-        if (batchCount > 0) {
-          await currentBatch.commit()
-          currentBatch = db.batch()
-          batchCount   = 0
-        }
+        if (batchCount > 0) { await currentBatch.commit(); currentBatch = db.batch(); batchCount = 0 }
       }
-
       for (const row of pendingRows) {
-
-        // ── ERROR rows → skip, mark COMMITTED (won't retry) ──
-        if (row.validation_status === VALIDATION_STATUS.ERROR) {
-          currentBatch.update(row._ref, {
-            commit_status : COMMIT_STATUS.COMMITTED,
-            committed_at  : FieldValue.serverTimestamp()
-          })
-          batchCount++
-          errors_skipped++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-          continue
+        const reservedId = (row.validation_status === VALIDATION_STATUS.OK) ? reservedIds[idIndex++] : null
+        let outcome
+        if (job.file_type === IMPORT_FILE_TYPE.PRODUCT) {
+          outcome = await commitProduct(row, currentBatch, reservedId, req.user.uid, job_id)
+        } else if (job.file_type === IMPORT_FILE_TYPE.CUSTOMER) {
+          outcome = await commitCustomer(row, currentBatch, reservedId, req.user.uid, job_id)
+        } else if (job.file_type === IMPORT_FILE_TYPE.SHIP_TO) {
+          outcome = await commitShipTo(row, currentBatch, reservedId, req.user.uid, job_id)
+        } else {
+          return res.status(400).json({ error: `Unknown file_type: ${job.file_type}` })
         }
-
-        // ── CONFLICT + SKIP ───────────────────────────────────
-        if (row.validation_status === VALIDATION_STATUS.CONFLICT &&
-            row.user_decision === USER_DECISION.SKIP) {
-          currentBatch.update(row._ref, {
-            commit_status : COMMIT_STATUS.COMMITTED,
-            committed_at  : FieldValue.serverTimestamp()
-          })
-          batchCount++
-          skipped++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-          continue
-        }
-
-        // ── CONFLICT + MANUAL_REVIEW → leave PENDING ─────────
-        if (row.validation_status === VALIDATION_STATUS.CONFLICT &&
-            row.user_decision === USER_DECISION.MANUAL_REVIEW) {
-          manual_review++
-          continue
-        }
-
-        // ── OK rows → INSERT ──────────────────────────────────
-        if (row.validation_status === VALIDATION_STATUS.OK) {
-          // Mark PROCESSING before write (crash-safe checkpoint)
-          currentBatch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
-          batchCount++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-
-          const product_id = reservedIds[idIndex++]
-          const productRef = db.collection('product_registry').doc(product_id)
-          currentBatch.set(productRef, {
-            product_id,
-            product_code        : row.product_code,
-            product_name        : row.product_name,
-            product_name_lower  : row.product_name.toLowerCase().trim(),
-            sku                 : row.sku || null,
-            status              : PRODUCT_STATUS.ACTIVE,
-            import_job_id       : job_id,
-            taxonomy_ordo_id    : null,
-            taxonomy_family_id  : null,
-            taxonomy_genus_id   : null,
-            taxonomy_species_id : null,
-            created_at          : FieldValue.serverTimestamp(),
-            updated_at          : FieldValue.serverTimestamp(),
-            created_by          : req.user.uid,
-            updated_by          : req.user.uid
-          })
-          batchCount++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-
-          // Mark COMMITTED after product write is in batch
-          currentBatch.update(row._ref, {
-            commit_status : COMMIT_STATUS.COMMITTED,
-            committed_at  : FieldValue.serverTimestamp()
-          })
-          batchCount++
-          inserted++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-          continue
-        }
-
-        // ── CONFLICT + UPDATE → overwrite existing ────────────
-        if (row.validation_status === VALIDATION_STATUS.CONFLICT &&
-            row.user_decision === USER_DECISION.UPDATE &&
-            row.conflict_with) {
-          // Mark PROCESSING
-          currentBatch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
-          batchCount++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-
-          const productRef = db.collection('product_registry').doc(row.conflict_with)
-          currentBatch.update(productRef, {
-            product_code       : row.product_code,
-            product_name       : row.product_name,
-            product_name_lower : row.product_name.toLowerCase().trim(),
-            sku                : row.sku || null,
-            import_job_id      : job_id,
-            updated_at         : FieldValue.serverTimestamp(),
-            updated_by         : req.user.uid
-          })
-          batchCount++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-
-          // Mark COMMITTED
-          currentBatch.update(row._ref, {
-            commit_status : COMMIT_STATUS.COMMITTED,
-            committed_at  : FieldValue.serverTimestamp()
-          })
-          batchCount++
-          updated++
-          if (batchCount >= BATCH_SIZE) await flushBatch()
-          continue
-        }
+        if      (outcome === 'inserted')      inserted++
+        else if (outcome === 'updated')       updated++
+        else if (outcome === 'skipped')       skipped++
+        else if (outcome === 'manual_review') manual_review++
+        else if (outcome === 'error_skipped') errors_skipped++
+        batchCount += 3
+        if (batchCount >= BATCH_SIZE) await flushBatch()
       }
-
       await flushBatch()
-
-      // Determine job status based on remaining uncommitted rows
       const remainingManual = allRows.filter(r =>
-        r.commit_status === COMMIT_STATUS.PENDING &&
-        r.user_decision === USER_DECISION.MANUAL_REVIEW
+        r.commit_status === COMMIT_STATUS.PENDING && r.user_decision === USER_DECISION.MANUAL_REVIEW
       ).length + manual_review
-
-      const finalStatus = remainingManual > 0
-        ? IMPORT_JOB_STATUS.PARTIALLY_COMMITTED
-        : IMPORT_JOB_STATUS.COMMITTED
-
+      const finalStatus = remainingManual > 0 ? IMPORT_JOB_STATUS.PARTIALLY_COMMITTED : IMPORT_JOB_STATUS.COMMITTED
       await db.collection('import_jobs').doc(job_id).update({
-        status       : finalStatus,
-        committed_at : FieldValue.serverTimestamp(),
-        committed_by : req.user.uid,
-        updated_at   : FieldValue.serverTimestamp()
+        status         : finalStatus,
+        committed_at   : FieldValue.serverTimestamp(),
+        committed_by   : req.user.uid,
+        committed_rows : inserted + updated,
+        skipped_rows   : skipped,
+        updated_at     : FieldValue.serverTimestamp()
       })
-
-      await writeAudit(AUDIT.IMPORT_JOB_COMMITTED, req.user.uid, job_id, {
-        inserted, updated, skipped, manual_review, errors_skipped
-      })
-
-      return res.status(200).json({
-        ok     : true,
-        status : finalStatus,
-        summary: { inserted, updated, skipped, manual_review, errors_skipped }
-      })
+      await writeAudit(AUDIT.IMPORT_JOB_COMMITTED, req.user.uid, job_id,
+        { file_type: job.file_type, inserted, updated, skipped, manual_review, errors_skipped })
+      return res.status(200).json({ ok: true, status: finalStatus,
+        summary: { inserted, updated, skipped, manual_review, errors_skipped } })
     } catch (err) {
       console.error('[import] commitImportJob:', err)
+      try {
+        await db.collection('import_jobs').doc(job_id).update({
+          status        : IMPORT_JOB_STATUS.FAILED,
+          failed_at     : FieldValue.serverTimestamp(),
+          failed_reason : err.message || 'Unknown error during commit',
+          updated_at    : FieldValue.serverTimestamp()
+        })
+      } catch (_) {}
       return res.status(500).json({ error: 'Internal error' })
     }
   }
 )
 
-// ═══════════════════════════════════════════════════════════
 // cancelImportJob
-// POST { job_id }
-// ═══════════════════════════════════════════════════════════
 exports.cancelImportJob = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
   async (req, res) => {
@@ -673,14 +567,14 @@ exports.cancelImportJob = run(
       const jobSnap = await db.collection('import_jobs').doc(job_id).get()
       if (!jobSnap.exists) return res.status(404).json({ error: 'Import job not found' })
       const job = jobSnap.data()
-      if (job.created_by !== req.user.uid)
-        return res.status(403).json({ error: 'You do not own this import job' })
+      if (job.created_by !== req.user.uid) return res.status(403).json({ error: 'You do not own this import job' })
       if ([IMPORT_JOB_STATUS.COMMITTED, IMPORT_JOB_STATUS.CANCELLED].includes(job.status))
         return res.status(400).json({ error: `Cannot cancel a job with status: ${job.status}` })
-
       await db.collection('import_jobs').doc(job_id).update({
-        status     : IMPORT_JOB_STATUS.CANCELLED,
-        updated_at : FieldValue.serverTimestamp()
+        status       : IMPORT_JOB_STATUS.CANCELLED,
+        cancelled_at : FieldValue.serverTimestamp(),
+        cancelled_by : req.user.uid,
+        updated_at   : FieldValue.serverTimestamp()
       })
       await writeAudit(AUDIT.IMPORT_JOB_CANCELLED, req.user.uid, job_id, {})
       return res.status(200).json({ ok: true })
