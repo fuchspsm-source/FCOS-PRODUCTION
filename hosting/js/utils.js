@@ -93,10 +93,10 @@ function getParam(name) {
   return new URLSearchParams(window.location.search).get(name)
 }
 
-function confirm(message) { return window.confirm(message) }
+// confirm: use window.confirm directly — do not wrap to avoid recursion
 
 Object.assign(window.FCOS, {
   formatDate, formatDateTime, roleLabel, formatRoles,
   statusBadge, el, showError, hideError, setLoading,
-  clearLoading, getParam, confirm, ROLE_LABELS, STATUS_LABELS
+  clearLoading, getParam, ROLE_LABELS, STATUS_LABELS
 })

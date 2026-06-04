@@ -60,7 +60,11 @@
   var NAV = [
     { type: 'section', label: 'ADMINISTRASI', roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'User Registry',   href: '/users/list.html', roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { label: 'Approval Matrix', disabled: true,           roles: ['SUPER_ADMIN', 'ADMIN'] }
+    { label: 'Organization Hierarchy', href: '/organization/list.html', roles: ['SUPER_ADMIN'] },
+    { type: 'section', label: 'PRODUCT', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] },
+    { label: 'Product Registry',  href: '/products/list.html',     roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] },
+    { label: 'Product Families',  href: '/products/families.html', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] },
+    { label: 'Family Mapping',    href: '/products/mapping.html',  roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] }
   ]
 
   FCOS.initPage().then(function (user) {

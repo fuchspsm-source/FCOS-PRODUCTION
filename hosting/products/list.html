@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Product Registry</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html" class="active">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/import.html">Import Products</a>
+      <a href="/products/import-history.html">Import History</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Product Registry</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Product Registry</div>
+            <div class="page-header__subtitle" id="list-subtitle"></div>
+          </div>
+          <button class="btn btn--primary" id="btn-create">+ Tambah Product</button>
+        </div>
+
+        <!-- Search + Filter -->
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+          <input type="text" id="search-input" class="form-control"
+                 placeholder="Cari kode, nama, atau SKU..." style="max-width:320px;">
+          <div class="filter-tabs" id="filter-status">
+            <button class="filter-tab active" data-status="">Semua</button>
+            <button class="filter-tab" data-status="ACTIVE">Active</button>
+            <button class="filter-tab" data-status="INACTIVE">Inactive</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Product Code</th>
+                <th>Product Name</th>
+                <th>SKU</th>
+                <th>Family</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="6" class="table-empty">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" style="display:flex; gap:8px; align-items:center; margin-top:16px; justify-content:flex-end;"></div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Create / Edit Product -->
+<div id="modal-product" class="modal-overlay hidden">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-product-title">Tambah Product</div>
+      <button class="modal__close" id="modal-product-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-product-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Product Code <span style="color:#dc2626">*</span></label>
+        <input type="text" id="input-product-code" class="form-control" placeholder="Contoh: 60012345">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Name <span style="color:#dc2626">*</span></label>
+        <input type="text" id="input-product-name" class="form-control" placeholder="Contoh: RENOLIN B20 208L">
+      </div>
+      <div class="form-group">
+        <label class="form-label">SKU</label>
+        <input type="text" id="input-sku" class="form-control" placeholder="Opsional">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-product-cancel">Batal</button>
+      <button class="btn btn--primary"   id="modal-product-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+  var PAGE_SIZE    = 20
+  var allProducts  = []   // raw from API
+  var filteredData = []   // after search+status filter
+  var mappingMap   = {}   // product_id → family_name
+  var familyMap    = {}   // family_id  → family_name
+  var currentPage  = 1
+  var currentStatus = ''
+  var editingId    = null
+  var canEdit      = false
+
+  // ─── Init ────────────────────────────────────────────────
+  FCOS.initPage().then(function (user) {
+    FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
+    canEdit = user.roles.some(function (r) {
+      return ['SUPER_ADMIN','ADMIN','COMMERCIAL_ADMIN'].includes(r)
+    })
+    if (!canEdit) document.getElementById('btn-create').style.display = 'none'
+
+    document.getElementById('topbar-name').textContent  = user.name
+    document.getElementById('sidebar-footer').innerHTML =
+      '<div>' + escHtml(user.name) + '</div>' +
+      '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('main-content').classList.remove('hidden')
+
+    loadAll()
+  })
+
+  // ─── Load all data ───────────────────────────────────────
+  async function loadAll() {
+    var tbody = document.getElementById('table-body')
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Memuat...</td></tr>'
+    try {
+      var results = await Promise.all([
+        FCOS.api('listProducts', 'GET'),
+        FCOS.api('listFamilies', 'GET'),
+        FCOS.api('listMappings', 'GET')
+      ])
+      allProducts = results[0].products || []
+      var families = results[1].families || []
+      var mappings = results[2].mappings || []
+
+      familyMap = {}
+      families.forEach(function (f) { familyMap[f.family_id] = f.family_name })
+
+      mappingMap = {}
+      mappings.forEach(function (m) {
+        mappingMap[m.product_id] = familyMap[m.family_id] || m.family_id
+      })
+
+      applyFilter()
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty text-danger">Gagal memuat: ' + escHtml(err.message) + '</td></tr>'
+    }
+  }
+
+  // ─── Filter + Search ─────────────────────────────────────
+  function applyFilter() {
+    var q = (document.getElementById('search-input').value || '').toLowerCase().trim()
+    filteredData = allProducts.filter(function (p) {
+      if (currentStatus && p.status !== currentStatus) return false
+      if (q) {
+        var hay = ((p.product_code || '') + ' ' + (p.product_name || '') + ' ' + (p.sku || '')).toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    }).sort(function (a, b) {
+      return (a.product_name || '').localeCompare(b.product_name || '', 'id', { sensitivity: 'base' })
+    })
+    currentPage = 1
+    renderTable()
+  }
+
+  // ─── Render ──────────────────────────────────────────────
+  function renderTable() {
+    var total = filteredData.length
+    var pages = Math.ceil(total / PAGE_SIZE) || 1
+    if (currentPage > pages) currentPage = pages
+
+    var start = (currentPage - 1) * PAGE_SIZE
+    var slice = filteredData.slice(start, start + PAGE_SIZE)
+
+    document.getElementById('list-subtitle').textContent =
+      total + ' product' + (currentStatus ? ' (' + currentStatus.toLowerCase() + ')' : '')
+
+    var tbody = document.getElementById('table-body')
+    if (slice.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Tidak ada product.</td></tr>'
+    } else {
+      tbody.innerHTML = slice.map(function (p) {
+        var familyName = mappingMap[p.product_id] || '—'
+        var actions = canEdit
+          ? '<button class="btn btn--secondary btn--sm" onclick="openEdit(\'' + escAttr(p.product_id) + '\')">Edit</button> ' +
+            (p.status === 'ACTIVE'
+              ? '<button class="btn btn--danger btn--sm" onclick="doDeactivate(\'' + escAttr(p.product_id) + '\')">Nonaktifkan</button>'
+              : '<button class="btn btn--success btn--sm" onclick="doReactivate(\'' + escAttr(p.product_id) + '\')">Aktifkan</button>')
+          : '—'
+        return '<tr>' +
+          '<td class="text-small">' + escHtml(p.product_code || '—') + '</td>' +
+          '<td>' + escHtml(p.product_name) + '</td>' +
+          '<td class="text-small">' + escHtml(p.sku || '—') + '</td>' +
+          '<td class="text-small">' + escHtml(familyName) + '</td>' +
+          '<td>' + FCOS.statusBadge(p.status) + '</td>' +
+          '<td style="white-space:nowrap;">' + actions + '</td>' +
+          '</tr>'
+      }).join('')
+    }
+
+    renderPagination(pages)
+  }
+
+  function renderPagination(pages) {
+    var el = document.getElementById('pagination')
+    if (pages <= 1) { el.innerHTML = ''; return }
+    var html = ''
+    if (currentPage > 1)
+      html += '<button class="btn btn--secondary btn--sm" onclick="goPage(' + (currentPage-1) + ')">← Prev</button>'
+    html += '<span class="text-small text-muted" style="padding:0 8px;">Hal ' + currentPage + ' / ' + pages + '</span>'
+    if (currentPage < pages)
+      html += '<button class="btn btn--secondary btn--sm" onclick="goPage(' + (currentPage+1) + ')">Next →</button>'
+    el.innerHTML = html
+  }
+
+  function goPage(n) { currentPage = n; renderTable() }
+
+  // ─── Filters ─────────────────────────────────────────────
+  document.getElementById('filter-status').addEventListener('click', function (e) {
+    var tab = e.target.closest('.filter-tab')
+    if (!tab) return
+    document.querySelectorAll('#filter-status .filter-tab').forEach(function (t) { t.classList.remove('active') })
+    tab.classList.add('active')
+    currentStatus = tab.dataset.status
+    applyFilter()
+  })
+
+  document.getElementById('search-input').addEventListener('input', applyFilter)
+
+  // ─── Create ──────────────────────────────────────────────
+  document.getElementById('btn-create').addEventListener('click', function () {
+    editingId = null
+    document.getElementById('modal-product-title').textContent = 'Tambah Product'
+    document.getElementById('input-product-code').value = ''
+    document.getElementById('input-product-name').value = ''
+    document.getElementById('input-sku').value = ''
+    hideErr('modal-product-error')
+    document.getElementById('modal-product').classList.remove('hidden')
+  })
+
+  // ─── Edit ────────────────────────────────────────────────
+  function openEdit(product_id) {
+    var p = allProducts.find(function (x) { return x.product_id === product_id })
+    if (!p) return
+    editingId = product_id
+    document.getElementById('modal-product-title').textContent = 'Edit Product'
+    document.getElementById('input-product-code').value = p.product_code || ''
+    document.getElementById('input-product-name').value = p.product_name || ''
+    document.getElementById('input-sku').value = p.sku || ''
+    hideErr('modal-product-error')
+    document.getElementById('modal-product').classList.remove('hidden')
+  }
+
+  // ─── Save ────────────────────────────────────────────────
+  document.getElementById('modal-product-save').addEventListener('click', async function () {
+    var btn          = this
+    var product_code = document.getElementById('input-product-code').value.trim()
+    var product_name = document.getElementById('input-product-name').value.trim()
+    var sku          = document.getElementById('input-sku').value.trim()
+    if (!product_code || !product_name) {
+      showErr('modal-product-error', 'Product Code dan Product Name wajib diisi.')
+      return
+    }
+    hideErr('modal-product-error')
+    FCOS.setLoading(btn, 'Menyimpan...')
+    try {
+      if (editingId) {
+        await FCOS.api('updateProduct', 'POST', { product_id: editingId, product_code, product_name, sku: sku || null })
+      } else {
+        await FCOS.api('createProduct', 'POST', { product_code, product_name, sku: sku || null })
+      }
+      closeProductModal()
+      await loadAll()
+    } catch (err) {
+      showErr('modal-product-error', err.message)
+    } finally {
+      FCOS.clearLoading(btn)
+    }
+  })
+
+  // ─── Deactivate / Reactivate ─────────────────────────────
+  async function doDeactivate(product_id) {
+    var p = allProducts.find(function (x) { return x.product_id === product_id })
+    if (!window.confirm('Nonaktifkan product "' + (p ? p.product_name : product_id) + '"?')) return
+    try {
+      await FCOS.api('deactivateProduct', 'POST', { product_id })
+      await loadAll()
+    } catch (err) { alert('Gagal: ' + err.message) }
+  }
+
+  async function doReactivate(product_id) {
+    var p = allProducts.find(function (x) { return x.product_id === product_id })
+    if (!window.confirm('Aktifkan kembali product "' + (p ? p.product_name : product_id) + '"?')) return
+    try {
+      await FCOS.api('reactivateProduct', 'POST', { product_id })
+      await loadAll()
+    } catch (err) { alert('Gagal: ' + err.message) }
+  }
+
+  // ─── Modal controls ──────────────────────────────────────
+  document.getElementById('modal-product-close').addEventListener('click', closeProductModal)
+  document.getElementById('modal-product-cancel').addEventListener('click', closeProductModal)
+  function closeProductModal() {
+    document.getElementById('modal-product').classList.add('hidden')
+    editingId = null
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', function () { FCOS.logout() })
+
+  // ─── Helpers ─────────────────────────────────────────────
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+  function escAttr(str) { return escHtml(str) }
+  function showErr(id, msg) { var e = document.getElementById(id); e.textContent = msg; e.classList.remove('hidden') }
+  function hideErr(id)      { var e = document.getElementById(id); e.textContent = '';  e.classList.add('hidden') }
+</script>
+
+</body>
+</html>

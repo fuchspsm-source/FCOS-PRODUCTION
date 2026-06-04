@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Import Products</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .step-bar { display:flex; gap:0; margin-bottom:28px; }
+    .step { flex:1; padding:10px 16px; font-size:0.8rem; font-weight:600;
+            background:#f1f5f9; color:#94a3b8; border-bottom:3px solid #e2e8f0;
+            text-align:center; }
+    .step.active  { color:#1a56db; border-bottom-color:#1a56db; background:#eff6ff; }
+    .step.done    { color:#16a34a; border-bottom-color:#16a34a; background:#f0fdf4; }
+
+    .drop-zone { border:2px dashed #cbd5e1; border-radius:10px; padding:48px 24px;
+                 text-align:center; cursor:pointer; transition:border-color .2s, background .2s; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color:#3b82f6; background:#eff6ff; }
+    .drop-zone__icon { font-size:2.5rem; margin-bottom:12px; }
+    .drop-zone__text { font-size:1rem; font-weight:600; color:#374151; }
+    .drop-zone__sub  { font-size:0.82rem; color:#64748b; margin-top:4px; }
+
+    .progress-bar { height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; margin:12px 0; }
+    .progress-bar__fill { height:100%; background:#3b82f6; transition:width .3s; border-radius:3px; }
+
+    .summary-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    .summary-card  { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+                     padding:16px; text-align:center; }
+    .summary-card__num   { font-size:1.8rem; font-weight:700; }
+    .summary-card__label { font-size:0.75rem; color:#64748b; text-transform:uppercase;
+                           letter-spacing:.05em; margin-top:2px; }
+    .summary-card--ok       .summary-card__num { color:#16a34a; }
+    .summary-card--conflict .summary-card__num { color:#d97706; }
+    .summary-card--error    .summary-card__num { color:#dc2626; }
+    .summary-card--total    .summary-card__num { color:#1a56db; }
+
+    .badge--ok       { background:#dcfce7; color:#166534; }
+    .badge--conflict { background:#fef9c3; color:#854d0e; }
+    .badge--error    { background:#fee2e2; color:#991b1b; }
+    .badge--warning  { background:#fff7ed; color:#c2410c; }
+    .badge--skip     { background:#f1f5f9; color:#475569; }
+    .badge--update   { background:#dbeafe; color:#1e40af; }
+    .badge--manual   { background:#f3e8ff; color:#7e22ce; }
+
+    .decision-btns { display:flex; gap:4px; flex-wrap:wrap; }
+    .decision-btn  { padding:3px 10px; border-radius:4px; font-size:0.75rem; font-weight:600;
+                     border:1px solid transparent; cursor:pointer; transition:opacity .15s; }
+    .decision-btn.active-skip   { background:#f1f5f9; color:#475569; border-color:#cbd5e1; }
+    .decision-btn.active-update { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+    .decision-btn.active-manual { background:#f3e8ff; color:#7e22ce; border-color:#d8b4fe; }
+    .decision-btn:not(.active-skip):not(.active-update):not(.active-manual)
+                   { background:#fff; color:#64748b; border-color:#e2e8f0; }
+    .decision-btn:hover { opacity:.8; }
+
+    .table-scroll { overflow-x:auto; }
+    .import-table  { min-width:900px; }
+
+    .pdf-notice { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px;
+                  padding:24px; text-align:center; margin-bottom:20px; }
+    .pdf-notice__icon { font-size:2rem; margin-bottom:8px; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/import.html" class="active">Import Products</a>
+      <a href="/products/import-history.html">Import History</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Import Products</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <!-- Step bar -->
+        <div class="step-bar">
+          <div class="step active" id="step-1">1. Upload</div>
+          <div class="step"        id="step-2">2. Preview & Validate</div>
+          <div class="step"        id="step-3">3. Commit</div>
+        </div>
+
+        <!-- ── STEP 1: Upload ─────────────────────────────── -->
+        <div id="panel-upload">
+          <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone__icon">📂</div>
+            <div class="drop-zone__text">Drop file di sini atau klik untuk memilih</div>
+            <div class="drop-zone__sub">CSV · XLS · XLSX — maks 50.000 baris</div>
+            <input type="file" id="file-input" accept=".csv,.xls,.xlsx" style="display:none">
+          </div>
+
+          <div id="pdf-notice" class="pdf-notice hidden">
+            <div class="pdf-notice__icon">📄</div>
+            <div style="font-weight:600; color:#c2410c;">PDF import not supported yet</div>
+            <div class="text-small text-muted" style="margin-top:4px;">
+              Gunakan format CSV, XLS, atau XLSX untuk import produk.
+            </div>
+          </div>
+
+          <div id="upload-status" class="hidden" style="margin-top:20px;">
+            <div class="card">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <div>
+                  <strong id="upload-filename"></strong>
+                  <span class="text-small text-muted" id="upload-meta"></span>
+                </div>
+                <button class="btn btn--secondary btn--sm" id="btn-reset">Ganti File</button>
+              </div>
+              <div class="progress-bar"><div class="progress-bar__fill" id="progress-fill" style="width:0%"></div></div>
+              <div class="text-small text-muted" id="progress-label">Parsing file...</div>
+              <div id="upload-error" class="alert alert--error" style="margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── STEP 2: Preview ───────────────────────────── -->
+        <div id="panel-preview" class="hidden">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <div style="font-size:1.1rem; font-weight:700;" id="preview-filename"></div>
+              <div class="text-small text-muted" id="preview-jobid"></div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn--secondary" id="btn-back-upload">← Ganti File</button>
+              <button class="btn btn--danger btn--sm" id="btn-cancel-job">Batalkan Import</button>
+            </div>
+          </div>
+
+          <div class="summary-cards">
+            <div class="summary-card summary-card--total">
+              <div class="summary-card__num" id="sum-total">0</div>
+              <div class="summary-card__label">Total Rows</div>
+            </div>
+            <div class="summary-card summary-card--ok">
+              <div class="summary-card__num" id="sum-ok">0</div>
+              <div class="summary-card__label">OK</div>
+            </div>
+            <div class="summary-card summary-card--conflict">
+              <div class="summary-card__num" id="sum-conflict">0</div>
+              <div class="summary-card__label">Conflict</div>
+            </div>
+            <div class="summary-card summary-card--error">
+              <div class="summary-card__num" id="sum-error">0</div>
+              <div class="summary-card__label">Error</div>
+            </div>
+          </div>
+
+          <!-- Filter tabs -->
+          <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+            <div class="filter-tabs" id="filter-vstatus">
+              <button class="filter-tab active" data-vs="">Semua</button>
+              <button class="filter-tab" data-vs="OK">OK</button>
+              <button class="filter-tab" data-vs="CONFLICT">Conflict</button>
+              <button class="filter-tab" data-vs="ERROR">Error</button>
+            </div>
+            <div id="unresolved-warn" class="hidden"
+                 style="font-size:.82rem; color:#d97706; font-weight:600;">
+              ⚠️ <span id="unresolved-count">0</span> conflict belum ada decision
+            </div>
+          </div>
+
+          <div class="table-scroll table-wrapper">
+            <table class="table import-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Product Code</th>
+                  <th>Product Name</th>
+                  <th>SKU</th>
+                  <th>Status</th>
+                  <th>Info</th>
+                  <th>Decision</th>
+                </tr>
+              </thead>
+              <tbody id="preview-body">
+                <tr><td colspan="7" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="preview-pagination" style="display:flex; gap:8px; align-items:center; margin-top:12px; justify-content:flex-end;"></div>
+
+          <div style="display:flex; justify-content:flex-end; margin-top:20px; gap:8px;">
+            <button class="btn btn--primary" id="btn-commit" disabled>
+              Commit Import
+            </button>
+          </div>
+        </div>
+
+        <!-- ── STEP 3: Result ────────────────────────────── -->
+        <div id="panel-result" class="hidden">
+          <div class="card" style="text-align:center; padding:40px;">
+            <div style="font-size:2.5rem; margin-bottom:12px;" id="result-icon">✅</div>
+            <div style="font-size:1.3rem; font-weight:700; margin-bottom:8px;" id="result-title"></div>
+            <div class="text-muted" id="result-subtitle"></div>
+            <div style="margin-top:24px; display:flex; gap:12px; justify-content:center;">
+              <a href="/products/list.html" class="btn btn--primary">Lihat Product Registry</a>
+              <a href="/products/import-history.html" class="btn btn--secondary">Import History</a>
+              <button class="btn btn--secondary" id="btn-new-import">Import Lagi</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SheetJS for XLS/XLSX parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+// ─── State ────────────────────────────────────────────────
+var currentJobId   = null
+var allRows        = []      // staging rows from backend
+var filteredRows   = []
+var currentVFilter = ''
+var currentPage    = 1
+var PAGE_SIZE      = 50
+
+// ─── Init ─────────────────────────────────────────────────
+FCOS.initPage().then(function (user) {
+  FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')
+  document.getElementById('topbar-name').textContent  = user.name
+  document.getElementById('sidebar-footer').innerHTML =
+    '<div>' + esc(user.name) + '</div>' +
+    '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+  document.getElementById('loading').style.display = 'none'
+  document.getElementById('main-content').classList.remove('hidden')
+})
+
+// ─── Drop zone ────────────────────────────────────────────
+var dropZone  = document.getElementById('drop-zone')
+var fileInput = document.getElementById('file-input')
+
+dropZone.addEventListener('click', function () { fileInput.click() })
+dropZone.addEventListener('dragover',  function (e) { e.preventDefault(); dropZone.classList.add('drag-over') })
+dropZone.addEventListener('dragleave', function ()  { dropZone.classList.remove('drag-over') })
+dropZone.addEventListener('drop', function (e) {
+  e.preventDefault(); dropZone.classList.remove('drag-over')
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0])
+})
+fileInput.addEventListener('change', function () {
+  if (this.files[0]) handleFile(this.files[0])
+})
+
+// ─── File handler ─────────────────────────────────────────
+function handleFile(file) {
+  var name = file.name.toLowerCase()
+  document.getElementById('pdf-notice').classList.add('hidden')
+
+  if (name.endsWith('.pdf')) {
+    document.getElementById('pdf-notice').classList.remove('hidden')
+    return
+  }
+  if (!name.endsWith('.csv') && !name.endsWith('.xls') && !name.endsWith('.xlsx')) {
+    alert('Format tidak didukung. Gunakan CSV, XLS, atau XLSX.')
+    return
+  }
+
+  var fileType = name.endsWith('.csv') ? 'CSV' : name.endsWith('.xls') ? 'XLS' : 'XLSX'
+  showUploadStatus(file.name)
+  setProgress(10, 'Membaca file...')
+
+  var reader = new FileReader()
+  reader.onload = function (e) {
+    setProgress(30, 'Parsing data...')
+    try {
+      var rows = parseFile(e.target.result, fileType, file.name)
+      if (rows.length === 0) { showUploadError('File kosong atau tidak ada data yang bisa dibaca.'); return }
+      if (rows.length > 50000) { showUploadError('File terlalu besar. Maks 50.000 baris.'); return }
+      setProgress(60, 'Mengirim ke server (' + rows.length + ' baris)...')
+      startImport(file.name, fileType, rows)
+    } catch (err) {
+      showUploadError('Gagal parse file: ' + err.message)
+    }
+  }
+  reader.onerror = function () { showUploadError('Gagal membaca file.') }
+
+  if (fileType === 'CSV') {
+    reader.readAsText(file)
+  } else {
+    reader.readAsArrayBuffer(file)
+  }
+}
+
+// ─── Parse ────────────────────────────────────────────────
+function parseFile(data, fileType, fileName) {
+  var workbook
+  if (fileType === 'CSV') {
+    workbook = XLSX.read(data, { type: 'string' })
+  } else {
+    workbook = XLSX.read(new Uint8Array(data), { type: 'array' })
+  }
+  var sheet = workbook.Sheets[workbook.SheetNames[0]]
+
+  // Read as array of arrays to find header row (supports files with title rows above header)
+  var aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+
+  // Known column name candidates (lowercase for comparison)
+  var CODE_CANDIDATES = ['product_code','productcode','product code','code','kode','kode produk','material code','material_code','mat code','mat_code','prod. code','prod.code','prodcode']
+  var NAME_CANDIDATES = ['product_name','productname','product name','name','nama','nama produk','description','desc','prod. name','prod.name','prodname']
+  var SKU_CANDIDATES  = ['sku']
+
+  // Find header row: first row where any cell matches a known candidate
+  var headerRowIdx = -1
+  var headerRow    = []
+  for (var r = 0; r < aoa.length; r++) {
+    var row = aoa[r]
+    for (var c = 0; c < row.length; c++) {
+      var cellLower = String(row[c] || '').toLowerCase().trim()
+      if (CODE_CANDIDATES.indexOf(cellLower) !== -1 || NAME_CANDIDATES.indexOf(cellLower) !== -1) {
+        headerRowIdx = r
+        headerRow    = row
+        break
+      }
+    }
+    if (headerRowIdx !== -1) break
+  }
+
+  if (headerRowIdx === -1) {
+    throw new Error('Header kolom tidak ditemukan. Pastikan file memiliki kolom "Product Code" dan "Product Name".')
+  }
+
+  // Map header names to column indices
+  var codeIdx = -1, nameIdx = -1, skuIdx = -1
+  headerRow.forEach(function (cell, i) {
+    var lower = String(cell || '').toLowerCase().trim()
+    if (CODE_CANDIDATES.indexOf(lower) !== -1 && codeIdx === -1) codeIdx = i
+    if (NAME_CANDIDATES.indexOf(lower) !== -1 && nameIdx === -1) nameIdx = i
+    if (SKU_CANDIDATES.indexOf(lower)  !== -1 && skuIdx  === -1) skuIdx  = i
+  })
+
+  // Parse data rows after header
+  var result = []
+  for (var d = headerRowIdx + 1; d < aoa.length; d++) {
+    var dataRow = aoa[d]
+    // Skip completely empty rows
+    var isEmpty = dataRow.every(function (cell) { return String(cell || '').trim() === '' })
+    if (isEmpty) continue
+
+    var product_code = codeIdx !== -1 ? String(dataRow[codeIdx] || '').trim() : ''
+    var product_name = nameIdx !== -1 ? String(dataRow[nameIdx] || '').trim() : ''
+    var sku          = skuIdx  !== -1 ? String(dataRow[skuIdx]  || '').trim() : ''
+
+    result.push({
+      row_number   : d + 1,  // 1-indexed (Excel row number)
+      product_code : product_code,
+      product_name : product_name,
+      sku          : sku,
+      raw_row      : dataRow
+    })
+  }
+  return result
+}
+
+function findCol(row, keys, candidates) {
+  for (var c = 0; c < candidates.length; c++) {
+    var cand = candidates[c].toLowerCase()
+    for (var k = 0; k < keys.length; k++) {
+      if (keys[k].toLowerCase() === cand) return row[keys[k]]
+    }
+  }
+  return ''
+}
+
+// ─── Import flow ──────────────────────────────────────────
+async function startImport(fileName, fileType, rows) {
+  try {
+    // 1. Create job
+    var jobRes = await FCOS.api('createImportJob', 'POST', {
+      file_name  : fileName,
+      file_type  : fileType,
+      total_rows : rows.length
+    })
+    currentJobId = jobRes.job_id
+
+    // 2. Submit rows in chunks of 250
+    var CHUNK = 250
+    var total = rows.length
+    var sent  = 0
+    for (var i = 0; i < rows.length; i += CHUNK) {
+      var chunk = rows.slice(i, i + CHUNK)
+      await FCOS.api('submitImportRows', 'POST', { job_id: currentJobId, rows: chunk })
+      sent += chunk.length
+      var pct = 60 + Math.round((sent / total) * 20)
+      setProgress(pct, 'Upload ' + sent + ' / ' + total + ' baris...')
+    }
+
+    // 3. Validate
+    setProgress(85, 'Validasi...')
+    await FCOS.api('validateImportJob', 'POST', { job_id: currentJobId })
+
+    // 4. Load result and show preview
+    setProgress(100, 'Selesai. Memuat preview...')
+    var jobData = await FCOS.api('getImportJob', 'GET', null, { job_id: currentJobId })
+    showPreview(fileName, jobData)
+
+  } catch (err) {
+    showUploadError('Gagal: ' + err.message)
+  }
+}
+
+// ─── Preview ──────────────────────────────────────────────
+function showPreview(fileName, jobData) {
+  goStep(2)
+  document.getElementById('panel-upload').classList.add('hidden')
+  document.getElementById('panel-preview').classList.remove('hidden')
+  document.getElementById('preview-filename').textContent = fileName
+  document.getElementById('preview-jobid').textContent    = 'Job ID: ' + jobData.job.job_id
+
+  allRows = jobData.rows || []
+  updateSummary()
+  applyVFilter()
+}
+
+function updateSummary() {
+  var total    = allRows.length
+  var ok       = allRows.filter(function (r) { return r.validation_status === 'OK' }).length
+  var conflict = allRows.filter(function (r) { return r.validation_status === 'CONFLICT' }).length
+  var error    = allRows.filter(function (r) { return r.validation_status === 'ERROR' }).length
+  var unresolved = allRows.filter(function (r) {
+    return r.validation_status === 'CONFLICT' && !r.user_decision
+  }).length
+
+  document.getElementById('sum-total').textContent    = total
+  document.getElementById('sum-ok').textContent       = ok
+  document.getElementById('sum-conflict').textContent = conflict
+  document.getElementById('sum-error').textContent    = error
+
+  var warnEl = document.getElementById('unresolved-warn')
+  if (unresolved > 0) {
+    document.getElementById('unresolved-count').textContent = unresolved
+    warnEl.classList.remove('hidden')
+    document.getElementById('btn-commit').disabled = true
+  } else {
+    warnEl.classList.add('hidden')
+    document.getElementById('btn-commit').disabled = false
+  }
+}
+
+function applyVFilter() {
+  filteredRows = allRows.filter(function (r) {
+    if (!currentVFilter) return true
+    return r.validation_status === currentVFilter
+  })
+  currentPage = 1
+  renderPreviewTable()
+}
+
+function renderPreviewTable() {
+  var total = filteredRows.length
+  var pages = Math.ceil(total / PAGE_SIZE) || 1
+  if (currentPage > pages) currentPage = pages
+  var start = (currentPage - 1) * PAGE_SIZE
+  var slice = filteredRows.slice(start, start + PAGE_SIZE)
+
+  var tbody = document.getElementById('preview-body')
+  if (slice.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Tidak ada data.</td></tr>'
+  } else {
+    tbody.innerHTML = slice.map(function (r) {
+      var vstatus   = r.validation_status || 'OK'
+      var badge     = vstatus === 'OK'
+        ? '<span class="badge badge--ok">OK</span>'
+        : vstatus === 'CONFLICT'
+          ? '<span class="badge badge--conflict">CONFLICT</span>'
+          : '<span class="badge badge--error">ERROR</span>'
+
+      var info = ''
+      if (r.validation_errors && r.validation_errors.length > 0) {
+        info = '<span class="badge badge--error">' + esc(r.validation_errors.join(', ')) + '</span>'
+      } else if (r.conflict_type) {
+        info = '<span class="badge badge--conflict">' + esc(r.conflict_type) + '</span>'
+        if (r.conflict_with) info += ' <span class="text-small text-muted">' + esc(r.conflict_with) + '</span>'
+      }
+      if (r.similar_name_warning) {
+        info += ' <span class="badge badge--warning">similar name</span>'
+      }
+
+      var decisionHtml = '—'
+      if (vstatus === 'CONFLICT') {
+        var skipCls   = r.user_decision === 'SKIP'          ? 'decision-btn active-skip'   : 'decision-btn'
+        var updateCls = r.user_decision === 'UPDATE'        ? 'decision-btn active-update' : 'decision-btn'
+        var manualCls = r.user_decision === 'MANUAL_REVIEW' ? 'decision-btn active-manual' : 'decision-btn'
+        decisionHtml =
+          '<div class="decision-btns">' +
+          '<button class="' + skipCls   + '" onclick="setDecision(\'' + esc(r.staging_id) + '\',\'SKIP\')">Skip</button>' +
+          '<button class="' + updateCls + '" onclick="setDecision(\'' + esc(r.staging_id) + '\',\'UPDATE\')">Update</button>' +
+          '<button class="' + manualCls + '" onclick="setDecision(\'' + esc(r.staging_id) + '\',\'MANUAL_REVIEW\')">Manual</button>' +
+          '</div>'
+      } else if (vstatus === 'ERROR') {
+        decisionHtml = '<span class="text-small text-muted">Tidak bisa di-commit</span>'
+      }
+
+      return '<tr>' +
+        '<td class="text-small">' + r.row_number + '</td>' +
+        '<td class="text-small">' + esc(r.product_code || '—') + '</td>' +
+        '<td>' + esc(r.product_name || '—') + '</td>' +
+        '<td class="text-small">' + esc(r.sku || '—') + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td>' + info + '</td>' +
+        '<td>' + decisionHtml + '</td>' +
+        '</tr>'
+    }).join('')
+  }
+
+  // Pagination
+  var pgEl = document.getElementById('preview-pagination')
+  if (pages <= 1) { pgEl.innerHTML = ''; return }
+  var html = ''
+  if (currentPage > 1)  html += '<button class="btn btn--secondary btn--sm" onclick="previewPage(' + (currentPage-1) + ')">← Prev</button>'
+  html += '<span class="text-small text-muted" style="padding:0 8px;">Hal ' + currentPage + ' / ' + pages + ' (' + total + ' rows)</span>'
+  if (currentPage < pages) html += '<button class="btn btn--secondary btn--sm" onclick="previewPage(' + (currentPage+1) + ')">Next →</button>'
+  pgEl.innerHTML = html
+}
+
+function previewPage(n) { currentPage = n; renderPreviewTable() }
+
+// ─── Decision ─────────────────────────────────────────────
+async function setDecision(staging_id, decision) {
+  try {
+    await FCOS.api('setRowDecision', 'POST', { staging_id, decision })
+    var row = allRows.find(function (r) { return r.staging_id === staging_id })
+    if (row) row.user_decision = decision
+    updateSummary()
+    renderPreviewTable()
+  } catch (err) {
+    alert('Gagal set decision: ' + err.message)
+  }
+}
+
+// ─── Filter tabs ──────────────────────────────────────────
+document.getElementById('filter-vstatus').addEventListener('click', function (e) {
+  var tab = e.target.closest('.filter-tab')
+  if (!tab) return
+  document.querySelectorAll('#filter-vstatus .filter-tab').forEach(function (t) { t.classList.remove('active') })
+  tab.classList.add('active')
+  currentVFilter = tab.dataset.vs
+  applyVFilter()
+})
+
+// ─── Commit ───────────────────────────────────────────────
+document.getElementById('btn-commit').addEventListener('click', async function () {
+  if (!currentJobId) return
+  if (!window.confirm('Lanjutkan commit import? Produk akan ditulis ke Product Registry.')) return
+  var btn = this
+  FCOS.setLoading(btn, 'Committing...')
+  try {
+    var result = await FCOS.api('commitImportJob', 'POST', { job_id: currentJobId })
+    showResult(result)
+  } catch (err) {
+    alert('Commit gagal: ' + err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+
+function showResult(result) {
+  goStep(3)
+  document.getElementById('panel-preview').classList.add('hidden')
+  document.getElementById('panel-result').classList.remove('hidden')
+  var s = result.summary || {}
+  var isPartial = result.status === 'PARTIALLY_COMMITTED'
+  document.getElementById('result-icon').textContent    = isPartial ? '⚠️' : '✅'
+  document.getElementById('result-title').textContent   = isPartial ? 'Import Selesai (Parsial)' : 'Import Berhasil'
+  document.getElementById('result-subtitle').textContent =
+    'Inserted: ' + (s.inserted||0) +
+    ' · Updated: ' + (s.updated||0) +
+    ' · Skipped: ' + (s.skipped||0) +
+    ' · Manual Review: ' + (s.manual_review||0) +
+    ' · Errors: ' + (s.errors_skipped||0)
+}
+
+// ─── Cancel ───────────────────────────────────────────────
+document.getElementById('btn-cancel-job').addEventListener('click', async function () {
+  if (!currentJobId) return
+  if (!window.confirm('Batalkan import job ini?')) return
+  try {
+    await FCOS.api('cancelImportJob', 'POST', { job_id: currentJobId })
+    resetToUpload()
+  } catch (err) { alert('Gagal cancel: ' + err.message) }
+})
+
+document.getElementById('btn-back-upload').addEventListener('click', function () {
+  if (currentJobId) {
+    if (!window.confirm('Kembali ke upload? Job yang sudah dibuat akan di-cancel.')) return
+    FCOS.api('cancelImportJob', 'POST', { job_id: currentJobId }).catch(function(){})
+  }
+  resetToUpload()
+})
+
+document.getElementById('btn-new-import').addEventListener('click', resetToUpload)
+
+document.getElementById('btn-reset').addEventListener('click', function () {
+  document.getElementById('upload-status').classList.add('hidden')
+  document.getElementById('pdf-notice').classList.add('hidden')
+  fileInput.value = ''
+  currentJobId = null
+})
+
+// ─── Helpers ──────────────────────────────────────────────
+function resetToUpload() {
+  currentJobId = null; allRows = []; filteredRows = []; currentPage = 1
+  document.getElementById('panel-upload').classList.remove('hidden')
+  document.getElementById('panel-preview').classList.add('hidden')
+  document.getElementById('panel-result').classList.add('hidden')
+  document.getElementById('upload-status').classList.add('hidden')
+  document.getElementById('pdf-notice').classList.add('hidden')
+  fileInput.value = ''
+  goStep(1)
+}
+
+function goStep(n) {
+  for (var i = 1; i <= 3; i++) {
+    var el = document.getElementById('step-' + i)
+    el.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '')
+  }
+}
+
+function showUploadStatus(name) {
+  document.getElementById('upload-filename').textContent = name
+  document.getElementById('upload-meta').textContent = ''
+  document.getElementById('upload-error').style.display = 'none'
+  document.getElementById('upload-status').classList.remove('hidden')
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width  = pct + '%'
+  document.getElementById('progress-label').textContent = label
+}
+
+function showUploadError(msg) {
+  var el = document.getElementById('upload-error')
+  el.textContent   = msg
+  el.style.display = 'block'
+  setProgress(0, 'Gagal.')
+}
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+document.getElementById('btn-logout').addEventListener('click', function () { FCOS.logout() })
+</script>
+
+</body>
+</html>

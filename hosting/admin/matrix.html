@@ -92,6 +92,11 @@
       color: var(--color-success, #065f46);
     }
 
+    .badge-inactive {
+      background: var(--color-surface-alt, #f3f4f6);
+      color: var(--color-text-secondary, #6b7280);
+    }
+
     /* ── Action column ───────────────────────────────────────── */
     .data-table th.col-action,
     .data-table td.col-action {
@@ -179,7 +184,7 @@
       background: var(--color-surface, #fff);
       border-radius: 10px;
       width: 100%;
-      max-width: 480px;
+      max-width: 520px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
       overflow: hidden;
     }
@@ -214,6 +219,8 @@
 
     .modal-body {
       padding: 24px;
+      max-height: 70vh;
+      overflow-y: auto;
     }
 
     .modal-footer {
@@ -227,7 +234,7 @@
 
     /* ── Form fields ─────────────────────────────────────────── */
     .form-group {
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .form-group:last-child {
@@ -291,7 +298,7 @@
     }
 
     .detail-label {
-      flex: 0 0 120px;
+      flex: 0 0 140px;
       font-weight: 600;
       color: var(--color-text-secondary, #6b7280);
       font-size: 0.8rem;
@@ -341,34 +348,13 @@
         <table class="data-table" aria-label="Approval Matrix list">
           <thead>
             <tr>
-              <th scope="col">Name</th>
+              <th scope="col">Sales Owner</th>
               <th scope="col">Status</th>
               <th scope="col" class="col-action">Action</th>
             </tr>
           </thead>
           <tbody id="matrix-table-body">
-            <!-- Sample rows — replaced by JS when wired -->
-            <tr>
-              <td>Sales Approval</td>
-              <td><span class="badge badge-active">Active</span></td>
-              <td class="col-action">
-                <button class="btn btn-ghost" type="button" data-matrix-id="sample-1">View</button>
-              </td>
-            </tr>
-            <tr>
-              <td>Pricing Approval</td>
-              <td><span class="badge badge-active">Active</span></td>
-              <td class="col-action">
-                <button class="btn btn-ghost" type="button" data-matrix-id="sample-2">View</button>
-              </td>
-            </tr>
-            <tr>
-              <td>Customer Approval</td>
-              <td><span class="badge badge-active">Active</span></td>
-              <td class="col-action">
-                <button class="btn btn-ghost" type="button" data-matrix-id="sample-3">View</button>
-              </td>
-            </tr>
+            <!-- Populated by matrix.js -->
           </tbody>
         </table>
       </div>
@@ -387,54 +373,69 @@
       </div>
 
       <div class="modal-body">
-        <form id="form-create-matrix" novalidate>
 
-          <div class="form-group">
-            <label class="form-label" for="input-matrix-name">
-              Matrix Name <span class="required">*</span>
-            </label>
-            <input
-              class="form-control"
-              type="text"
-              id="input-matrix-name"
-              name="matrix_name"
-              placeholder="e.g. Sales Approval"
-              autocomplete="off"
-              required
-            />
-          </div>
+        <div class="form-divider">Approval Chain</div>
 
-          <div class="form-divider">Approval Levels</div>
+        <div class="form-group">
+          <label class="form-label" for="select-sales-owner">
+            Sales Owner <span class="required">*</span>
+          </label>
+          <select class="form-control" id="select-sales-owner" name="sales_owner_id" required>
+            <option value="" disabled selected>— Select Area Manager —</option>
+          </select>
+        </div>
 
-          <div class="form-group">
-            <label class="form-label" for="select-level-1">
-              Level 1 Role <span class="required">*</span>
-            </label>
-            <select class="form-control" id="select-level-1" name="level_1_role" required>
-              <option value="" disabled selected>— Select role —</option>
-              <!-- Options populated by JS via listUsers -->
-            </select>
-          </div>
+        <div class="form-group">
+          <label class="form-label" for="select-rm">
+            Regional Manager <span class="required">*</span>
+          </label>
+          <select class="form-control" id="select-rm" name="rm_id" required>
+            <option value="" disabled selected>— Select Regional Manager —</option>
+          </select>
+        </div>
 
-          <div class="form-group">
-            <label class="form-label" for="select-level-2">
-              Level 2 Role <span class="required">*</span>
-            </label>
-            <select class="form-control" id="select-level-2" name="level_2_role" required>
-              <option value="" disabled selected>— Select role —</option>
-            </select>
-          </div>
+        <div class="form-group">
+          <label class="form-label" for="select-dm">
+            Division Manager <span class="required">*</span>
+          </label>
+          <select class="form-control" id="select-dm" name="dm_id" required>
+            <option value="" disabled selected>— Select Division Manager —</option>
+          </select>
+        </div>
 
-          <div class="form-group">
-            <label class="form-label" for="select-level-3">
-              Level 3 Role <span class="required">*</span>
-            </label>
-            <select class="form-control" id="select-level-3" name="level_3_role" required>
-              <option value="" disabled selected>— Select role —</option>
-            </select>
-          </div>
+        <div class="form-group">
+          <label class="form-label" for="select-sd">
+            Sales Director <span class="required">*</span>
+          </label>
+          <select class="form-control" id="select-sd" name="sd_id" required>
+            <option value="" disabled selected>— Select Sales Director —</option>
+          </select>
+        </div>
 
-        </form>
+        <div class="form-group">
+          <label class="form-label" for="select-md">
+            Managing Director <span class="required">*</span>
+          </label>
+          <select class="form-control" id="select-md" name="md_id" required>
+            <option value="" disabled selected>— Select Managing Director —</option>
+          </select>
+        </div>
+
+        <div class="form-divider">Effectivity</div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-effective-from">
+            Effective From <span class="required">*</span>
+          </label>
+          <input
+            class="form-control"
+            type="date"
+            id="input-effective-from"
+            name="effective_from"
+            required
+          />
+        </div>
+
       </div><!-- /.modal-body -->
 
       <div class="modal-footer">
@@ -455,28 +456,37 @@
       </div>
 
       <div class="modal-body" id="matrix-detail-body">
-        <!-- Sample content — replaced by JS when wired -->
         <div class="detail-row">
-          <span class="detail-label">Matrix Name</span>
-          <span class="detail-value" id="detail-matrix-name">Sales Approval</span>
+          <span class="detail-label">Sales Owner</span>
+          <span class="detail-value" id="detail-sales-owner">—</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Level 1</span>
-          <span class="detail-value" id="detail-level-1">Sales Manager</span>
+          <span class="detail-label">Regional Manager</span>
+          <span class="detail-value" id="detail-rm">—</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Level 2</span>
-          <span class="detail-value" id="detail-level-2">Country Manager</span>
+          <span class="detail-label">Division Manager</span>
+          <span class="detail-value" id="detail-dm">—</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Level 3</span>
-          <span class="detail-value" id="detail-level-3">Finance Director</span>
+          <span class="detail-label">Sales Director</span>
+          <span class="detail-value" id="detail-sd">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Managing Director</span>
+          <span class="detail-value" id="detail-md">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Effective From</span>
+          <span class="detail-value" id="detail-effective-from">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Effective To</span>
+          <span class="detail-value" id="detail-effective-to">—</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Status</span>
-          <span class="detail-value" id="detail-status">
-            <span class="badge badge-active">Active</span>
-          </span>
+          <span class="detail-value" id="detail-status">—</span>
         </div>
       </div><!-- /.modal-body -->
 
@@ -487,24 +497,13 @@
     </div><!-- /.modal -->
   </div>
 
-  <!-- ── Minimal modal orchestration (open/close only, no Firebase) ── -->
+  <!-- ── Modal open/close orchestration ────────────────────── -->
   <script>
     (function () {
-      // Open create-matrix modal
       document.getElementById('btn-create-matrix').addEventListener('click', function () {
         document.getElementById('modal-create-matrix').classList.add('is-open');
       });
 
-      // Open detail modal from table View buttons (sample rows)
-      document.getElementById('matrix-table-body').addEventListener('click', function (e) {
-        var btn = e.target.closest('[data-matrix-id]');
-        if (!btn) return;
-        // Pass matrix id to close button for future wiring
-        document.getElementById('btn-close-matrix').dataset.matrixId = btn.dataset.matrixId;
-        document.getElementById('modal-matrix-detail').classList.add('is-open');
-      });
-
-      // Close buttons (Cancel / Close / ✕)
       document.querySelectorAll('[data-close-modal]').forEach(function (el) {
         el.addEventListener('click', function () {
           var targetId = el.getAttribute('data-close-modal');
@@ -512,16 +511,12 @@
         });
       });
 
-      // Close on overlay click
       document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
         overlay.addEventListener('click', function (e) {
-          if (e.target === overlay) {
-            overlay.classList.remove('is-open');
-          }
+          if (e.target === overlay) overlay.classList.remove('is-open');
         });
       });
 
-      // Close on Escape
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
           document.querySelectorAll('.modal-overlay.is-open').forEach(function (m) {
@@ -532,15 +527,11 @@
     })();
   </script>
 
-  
-  
-  <!-- matrix.js will be loaded here in Batch 5 -->
-
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="/js/firebase-init.js"></script>
-<script src="/js/api.js"></script>
-<script src="/js/auth.js"></script>
-<script src="/js/matrix.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="/js/firebase-init.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/matrix.js"></script>
 </body>
 </html>

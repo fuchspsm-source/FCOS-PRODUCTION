@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Customer Registry</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/hierarchy.html">Product Hierarchy</a>
+      <div class="sidebar__section-label">Customer</div>
+      <a href="/customers/customer-registry.html" class="active">Customer Registry</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Customer Registry</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Customer Registry</div>
+            <div class="page-header__subtitle" id="list-subtitle"></div>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+          <input type="text" class="form-input" id="search-input"
+            placeholder="Cari customer code / nama..." style="max-width:320px;">
+          <div class="filter-tabs" id="filter-status">
+            <button class="filter-tab active" data-status="">Semua</button>
+            <button class="filter-tab" data-status="active">Active</button>
+            <button class="filter-tab" data-status="inactive">Inactive</button>
+          </div>
+          <div class="filter-tabs" id="filter-type">
+            <button class="filter-tab active" data-type="">Semua Tipe</button>
+            <button class="filter-tab" data-type="SOLD_TO">Sold-To</button>
+            <button class="filter-tab" data-type="SHIP_TO">Ship-To</button>
+          </div>
+          <button class="btn btn--primary btn--sm" id="btn-new-customer" style="margin-left:auto;">
+            + Customer Baru
+          </button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Customer Code</th>
+                <th>Customer Name</th>
+                <th>Type</th>
+                <th>Parent Customer</th>
+                <th>City</th>
+                <th>Province</th>
+                <th>Island</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-customers">
+              <tr><td colspan="9" class="table-empty">Memuat...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<!-- MODAL: CREATE                                          -->
+<!-- ====================================================== -->
+<div id="modal-create" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title">Customer Baru</div>
+      <button class="modal__close" id="modal-create-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-create-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Customer Code <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="create-code"
+          placeholder="Contoh: 6000087" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Customer Name <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="create-name" placeholder="Nama customer">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Customer Type <span style="color:red">*</span></label>
+        <select class="form-input" id="create-type">
+          <option value="SOLD_TO">Sold-To (Billing)</option>
+          <option value="SHIP_TO">Ship-To (Delivery)</option>
+        </select>
+      </div>
+      <div class="form-group" id="create-parent-group" style="display:none;">
+        <label class="form-label">Parent Customer (Sold-To) <span style="color:red">*</span></label>
+        <select class="form-input" id="create-parent">
+          <option value="">— Pilih Sold-To —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <input type="text" class="form-input" id="create-address" placeholder="Alamat">
+      </div>
+      <div class="form-group">
+        <label class="form-label">City</label>
+        <input type="text" class="form-input" id="create-city" placeholder="Kota">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Province</label>
+        <input type="text" class="form-input" id="create-province" placeholder="Provinsi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Island</label>
+        <input type="text" class="form-input" id="create-island" placeholder="Pulau">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-create-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-create-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<!-- MODAL: EDIT                                            -->
+<!-- ====================================================== -->
+<div id="modal-edit" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title">Edit Customer</div>
+      <button class="modal__close" id="modal-edit-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-edit-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Customer Code</label>
+        <input type="text" class="form-input" id="edit-code" disabled
+          style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+        <div class="text-small text-muted" style="margin-top:4px;">
+          Customer Code tidak dapat diubah setelah dibuat.
+        </div>
+      </div>
+
+      <!-- CR#1: SUPER_ADMIN sees editable select, others see disabled text -->
+      <div class="form-group" id="edit-type-group-admin">
+        <label class="form-label">Customer Type</label>
+        <select class="form-input" id="edit-type-select">
+          <option value="SOLD_TO">Sold-To (Billing)</option>
+          <option value="SHIP_TO">Ship-To (Delivery)</option>
+        </select>
+        <div class="text-small text-muted" style="margin-top:4px;">
+          Hanya SUPER_ADMIN yang dapat mengubah Customer Type.
+        </div>
+      </div>
+      <div class="form-group" id="edit-type-group-readonly" style="display:none;">
+        <label class="form-label">Customer Type</label>
+        <input type="text" class="form-input" id="edit-type-text" disabled
+          style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Customer Name <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="edit-name" placeholder="Nama customer">
+      </div>
+      <div class="form-group" id="edit-parent-group" style="display:none;">
+        <label class="form-label">Parent Customer (Sold-To) <span style="color:red">*</span></label>
+        <select class="form-input" id="edit-parent">
+          <option value="">— Pilih Sold-To —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <input type="text" class="form-input" id="edit-address" placeholder="Alamat">
+      </div>
+      <div class="form-group">
+        <label class="form-label">City</label>
+        <input type="text" class="form-input" id="edit-city" placeholder="Kota">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Province</label>
+        <input type="text" class="form-input" id="edit-province" placeholder="Provinsi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Island</label>
+        <input type="text" class="form-input" id="edit-island" placeholder="Pulau">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-edit-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-edit-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+var allCustomers  = []
+var customerMap   = {}
+var currentStatus = ''
+var currentType   = ''
+var editingId     = null
+var isSuperAdmin  = false
+
+// ============================================================
+// INIT
+// ============================================================
+FCOS.initPage().then(function (user) {
+  FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
+
+  isSuperAdmin = (user.roles || []).includes('SUPER_ADMIN')
+
+  document.getElementById('topbar-name').textContent  = user.name
+  document.getElementById('sidebar-footer').innerHTML =
+    '<div>' + escHtml(user.name) + '</div>' +
+    '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+
+  // CR#1: show correct type field in edit modal based on role
+  if (isSuperAdmin) {
+    document.getElementById('edit-type-group-admin').style.display    = 'block'
+    document.getElementById('edit-type-group-readonly').style.display = 'none'
+  } else {
+    document.getElementById('edit-type-group-admin').style.display    = 'none'
+    document.getElementById('edit-type-group-readonly').style.display = 'block'
+  }
+
+  document.getElementById('loading').style.display = 'none'
+  document.getElementById('main-content').classList.remove('hidden')
+
+  loadCustomers()
+})
+
+// ============================================================
+// LOAD
+// ============================================================
+async function loadCustomers() {
+  var tbody = document.getElementById('tbody-customers')
+  tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Memuat...</td></tr>'
+  try {
+    var data     = await FCOS.api('listCustomers', 'GET')
+    allCustomers = data.customers || []
+    customerMap  = {}
+    allCustomers.forEach(function (c) { customerMap[c.id] = c })
+    populateParentDropdowns()
+    renderTable()
+  } catch (err) {
+    tbody.innerHTML =
+      '<tr><td colspan="9" class="table-empty text-danger">Gagal memuat: ' +
+      escHtml(err.message) + '</td></tr>'
+  }
+}
+
+// ============================================================
+// POPULATE PARENT DROPDOWNS
+// ============================================================
+function populateParentDropdowns() {
+  var soldTos = allCustomers.filter(function (c) {
+    return c.customerType === 'SOLD_TO' && c.active
+  })
+
+  ;['create-parent', 'edit-parent'].forEach(function (selId) {
+    var sel = document.getElementById(selId)
+    sel.innerHTML = '<option value="">— Pilih Sold-To —</option>'
+    soldTos.forEach(function (c) {
+      var opt = document.createElement('option')
+      opt.value = c.id
+      opt.textContent = c.customerCode + ' — ' + c.customerName
+      sel.appendChild(opt)
+    })
+  })
+}
+
+// ============================================================
+// RENDER TABLE
+// ============================================================
+function renderTable() {
+  var search = document.getElementById('search-input').value.toLowerCase()
+
+  var soldTos = allCustomers.filter(function (c) {
+    return c.customerType === 'SOLD_TO' || !c.customerType
+  })
+  var ordered = []
+
+  soldTos.forEach(function (parent) {
+    var parentMatch = true
+    if (currentStatus === 'active'   && !parent.active) parentMatch = false
+    if (currentStatus === 'inactive' &&  parent.active) parentMatch = false
+    if (currentType === 'SHIP_TO') parentMatch = false
+    if (search &&
+      !parent.customerCode?.toLowerCase().includes(search) &&
+      !parent.customerName?.toLowerCase().includes(search)) parentMatch = false
+    if (parentMatch) ordered.push({ record: parent, indent: false })
+
+    if (currentType !== 'SOLD_TO') {
+      var children = allCustomers.filter(function (c) {
+        return c.customerType === 'SHIP_TO' && c.parentCustomerId === parent.id
+      })
+      children.forEach(function (child) {
+        var childMatch = true
+        if (currentStatus === 'active'   && !child.active) childMatch = false
+        if (currentStatus === 'inactive' &&  child.active) childMatch = false
+        if (search &&
+          !child.customerCode?.toLowerCase().includes(search) &&
+          !child.customerName?.toLowerCase().includes(search)) childMatch = false
+        if (childMatch) ordered.push({ record: child, indent: true })
+      })
+    }
+  })
+
+  // Orphan SHIP_TOs
+  if (currentType !== 'SOLD_TO') {
+    allCustomers.filter(function (c) {
+      return c.customerType === 'SHIP_TO' && !c.parentCustomerId
+    }).forEach(function (c) {
+      var match = true
+      if (currentStatus === 'active'   && !c.active) match = false
+      if (currentStatus === 'inactive' &&  c.active) match = false
+      if (search &&
+        !c.customerCode?.toLowerCase().includes(search) &&
+        !c.customerName?.toLowerCase().includes(search)) match = false
+      if (match) ordered.push({ record: c, indent: false })
+    })
+  }
+
+  document.getElementById('list-subtitle').textContent = ordered.length + ' customer'
+
+  var tbody = document.getElementById('tbody-customers')
+  if (ordered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Tidak ada data.</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = ordered.map(function (item) {
+    var c  = item.record
+    var indent = item.indent
+
+    var typeBadge = c.customerType === 'SHIP_TO'
+      ? '<span style="font-size:0.75rem;background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:4px;">Ship-To</span>'
+      : '<span style="font-size:0.75rem;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:4px;">Sold-To</span>'
+
+    // CR#2: use stored parentCustomerCode + parentCustomerId
+    var parentLabel = '—'
+    if (c.parentCustomerCode && c.parentCustomerId) {
+      var parentName = customerMap[c.parentCustomerId]
+        ? customerMap[c.parentCustomerId].customerName : ''
+      parentLabel = escHtml(c.parentCustomerCode + (parentName ? ' — ' + parentName : ''))
+    }
+
+    var codeCell = indent
+      ? '<span style="padding-left:20px;" class="text-small">' + escHtml(c.customerCode) + '</span>'
+      : '<strong>' + escHtml(c.customerCode) + '</strong>'
+
+    var nameCell = indent
+      ? '<span style="padding-left:20px;color:#64748b;">↳ ' + escHtml(c.customerName) + '</span>'
+      : '<strong>' + escHtml(c.customerName) + '</strong>'
+
+    var toggleLabel = c.active ? 'Nonaktifkan' : 'Aktifkan'
+    var toggleClass = c.active ? 'btn--secondary' : 'btn--primary'
+
+    return '<tr>' +
+      '<td>' + codeCell + '</td>' +
+      '<td>' + nameCell + '</td>' +
+      '<td>' + typeBadge + '</td>' +
+      '<td class="text-small">' + parentLabel + '</td>' +
+      '<td>' + escHtml(c.city     || '—') + '</td>' +
+      '<td>' + escHtml(c.province || '—') + '</td>' +
+      '<td>' + escHtml(c.island   || '—') + '</td>' +
+      '<td>' + FCOS.statusBadge(c.active ? 'ACTIVE' : 'INACTIVE') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn--secondary btn--sm" onclick="openEdit(\'' + c.id + '\')">Edit</button> ' +
+        '<button class="btn ' + toggleClass + ' btn--sm" onclick="toggleStatus(\'' + c.id + '\')">' + toggleLabel + '</button>' +
+      '</td>' +
+      '</tr>'
+  }).join('')
+}
+
+// ============================================================
+// SEARCH & FILTER
+// ============================================================
+document.getElementById('search-input').addEventListener('input', renderTable)
+
+document.getElementById('filter-status').addEventListener('click', function (e) {
+  var tab = e.target.closest('.filter-tab')
+  if (!tab) return
+  document.querySelectorAll('#filter-status .filter-tab').forEach(function (t) { t.classList.remove('active') })
+  tab.classList.add('active')
+  currentStatus = tab.dataset.status
+  renderTable()
+})
+
+document.getElementById('filter-type').addEventListener('click', function (e) {
+  var tab = e.target.closest('.filter-tab')
+  if (!tab) return
+  document.querySelectorAll('#filter-type .filter-tab').forEach(function (t) { t.classList.remove('active') })
+  tab.classList.add('active')
+  currentType = tab.dataset.type
+  renderTable()
+})
+
+// ============================================================
+// MODAL: CREATE — type toggle
+// ============================================================
+document.getElementById('create-type').addEventListener('change', function () {
+  var isShipTo = this.value === 'SHIP_TO'
+  document.getElementById('create-parent-group').style.display = isShipTo ? 'block' : 'none'
+})
+
+document.getElementById('btn-new-customer').addEventListener('click', function () {
+  document.getElementById('create-code').value     = ''
+  document.getElementById('create-name').value     = ''
+  document.getElementById('create-type').value     = 'SOLD_TO'
+  document.getElementById('create-parent').value   = ''
+  document.getElementById('create-parent-group').style.display = 'none'
+  document.getElementById('create-address').value  = ''
+  document.getElementById('create-city').value     = ''
+  document.getElementById('create-province').value = ''
+  document.getElementById('create-island').value   = ''
+  hideErr('modal-create-error')
+  document.getElementById('modal-create').classList.remove('hidden')
+})
+
+document.getElementById('modal-create-close').addEventListener('click', function () {
+  document.getElementById('modal-create').classList.add('hidden')
+})
+document.getElementById('modal-create-cancel').addEventListener('click', function () {
+  document.getElementById('modal-create').classList.add('hidden')
+})
+
+document.getElementById('modal-create-save').addEventListener('click', async function () {
+  var btn      = this
+  var code     = document.getElementById('create-code').value.trim().toUpperCase()
+  var name     = document.getElementById('create-name').value.trim()
+  var type     = document.getElementById('create-type').value
+  var parent   = document.getElementById('create-parent').value
+  var address  = document.getElementById('create-address').value.trim()
+  var city     = document.getElementById('create-city').value.trim()
+  var province = document.getElementById('create-province').value.trim()
+  var island   = document.getElementById('create-island').value.trim()
+  hideErr('modal-create-error')
+
+  if (!code) { showErr('modal-create-error', 'Customer Code wajib diisi.'); return }
+  if (!name) { showErr('modal-create-error', 'Customer Name wajib diisi.'); return }
+  if (type === 'SHIP_TO' && !parent) {
+    showErr('modal-create-error', 'Parent Customer wajib dipilih untuk Ship-To.')
+    return
+  }
+
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    var res = await FCOS.api('createCustomer', 'POST', {
+      customerCode:     code,
+      customerName:     name,
+      customerType:     type,
+      parentCustomerId: type === 'SHIP_TO' ? parent : null,
+      address, city, province, island,
+    })
+    // Get parentCustomerCode from selected option
+    var parentCustomerCode = null
+    if (type === 'SHIP_TO' && parent) {
+      var parentCustomer = customerMap[parent]
+      if (parentCustomer) parentCustomerCode = parentCustomer.customerCode
+    }
+    var newCustomer = {
+      id: res.id, customerCode: code, customerName: name,
+      customerType: type,
+      parentCustomerId:   type === 'SHIP_TO' ? parent             : null,
+      parentCustomerCode: type === 'SHIP_TO' ? parentCustomerCode : null,
+      address, city, province, island, active: true,
+    }
+    allCustomers.push(newCustomer)
+    customerMap[res.id] = newCustomer
+    document.getElementById('modal-create').classList.add('hidden')
+    populateParentDropdowns()
+    renderTable()
+  } catch (err) {
+    var msg = err.message
+    if (msg === 'Customer Code already exists.')
+      msg = 'Kode Customer sudah ada. Silakan masukkan kode lainnya.'
+    showErr('modal-create-error', msg)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+
+// ============================================================
+// MODAL: EDIT — type toggle (SUPER_ADMIN only)
+// ============================================================
+document.getElementById('edit-type-select').addEventListener('change', function () {
+  var isShipTo = this.value === 'SHIP_TO'
+  document.getElementById('edit-parent-group').style.display = isShipTo ? 'block' : 'none'
+})
+
+function openEdit(id) {
+  editingId = id
+  var c = customerMap[id]
+
+  document.getElementById('edit-code').value     = c.customerCode
+  document.getElementById('edit-name').value     = c.customerName  || ''
+  document.getElementById('edit-address').value  = c.address       || ''
+  document.getElementById('edit-city').value     = c.city          || ''
+  document.getElementById('edit-province').value = c.province      || ''
+  document.getElementById('edit-island').value   = c.island        || ''
+
+  var currentTypeVal = c.customerType || 'SOLD_TO'
+
+  if (isSuperAdmin) {
+    document.getElementById('edit-type-select').value = currentTypeVal
+  } else {
+    document.getElementById('edit-type-text').value =
+      currentTypeVal === 'SHIP_TO' ? 'Ship-To (Delivery)' : 'Sold-To (Billing)'
+  }
+
+  var isShipTo = currentTypeVal === 'SHIP_TO'
+  document.getElementById('edit-parent-group').style.display = isShipTo ? 'block' : 'none'
+  if (isShipTo) {
+    document.getElementById('edit-parent').value = c.parentCustomerId || ''
+  }
+
+  hideErr('modal-edit-error')
+  document.getElementById('modal-edit').classList.remove('hidden')
+}
+
+document.getElementById('modal-edit-close').addEventListener('click', function () {
+  document.getElementById('modal-edit').classList.add('hidden')
+})
+document.getElementById('modal-edit-cancel').addEventListener('click', function () {
+  document.getElementById('modal-edit').classList.add('hidden')
+})
+
+document.getElementById('modal-edit-save').addEventListener('click', async function () {
+  var btn      = this
+  var name     = document.getElementById('edit-name').value.trim()
+  var address  = document.getElementById('edit-address').value.trim()
+  var city     = document.getElementById('edit-city').value.trim()
+  var province = document.getElementById('edit-province').value.trim()
+  var island   = document.getElementById('edit-island').value.trim()
+  var c        = customerMap[editingId]
+  hideErr('modal-edit-error')
+
+  if (!name) { showErr('modal-edit-error', 'Customer Name wajib diisi.'); return }
+
+  var payload = { id: editingId, customerName: name, address, city, province, island }
+
+  // CR#1: include customerType if SUPER_ADMIN
+  var newType = c.customerType
+  if (isSuperAdmin) {
+    newType = document.getElementById('edit-type-select').value
+    payload.customerType = newType
+  }
+
+  // Parent field
+  var isShipTo = newType === 'SHIP_TO'
+  if (isShipTo) {
+    var parent = document.getElementById('edit-parent').value
+    if (!parent) { showErr('modal-edit-error', 'Parent Customer wajib dipilih untuk Ship-To.'); return }
+    payload.parentCustomerId = parent
+  } else {
+    payload.parentCustomerId = null
+  }
+
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    await FCOS.api('updateCustomer', 'POST', payload)
+    // Update local state
+    c.customerName = name
+    c.address = address; c.city = city; c.province = province; c.island = island
+    if (isSuperAdmin) c.customerType = newType
+    if (isShipTo) {
+      c.parentCustomerId = payload.parentCustomerId
+      var parentCustomer = customerMap[payload.parentCustomerId]
+      c.parentCustomerCode = parentCustomer ? parentCustomer.customerCode : null
+    } else {
+      c.parentCustomerId   = null
+      c.parentCustomerCode = null
+    }
+    document.getElementById('modal-edit').classList.add('hidden')
+    populateParentDropdowns()
+    renderTable()
+  } catch (err) {
+    showErr('modal-edit-error', err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+
+// ============================================================
+// TOGGLE STATUS
+// ============================================================
+async function toggleStatus(id) {
+  var c      = customerMap[id]
+  var action = c.active ? 'deactivateCustomer' : 'activateCustomer'
+  var label  = c.active ? 'nonaktifkan' : 'aktifkan'
+  if (!confirm('Yakin ' + label + ' customer ' + c.customerCode + '?')) return
+  try {
+    await FCOS.api(action, 'POST', { id: id })
+    c.active = !c.active
+    renderTable()
+  } catch (err) {
+    alert('Gagal: ' + err.message)
+  }
+}
+
+// ============================================================
+// LOGOUT
+// ============================================================
+document.getElementById('btn-logout').addEventListener('click', function () {
+  FCOS.logout()
+})
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+function showErr(id, msg) {
+  var el = document.getElementById(id)
+  el.textContent = msg
+  el.classList.remove('hidden')
+}
+function hideErr(id) {
+  var el = document.getElementById(id)
+  el.textContent = ''
+  el.classList.add('hidden')
+}
+</script>
+
+</body>
+</html>

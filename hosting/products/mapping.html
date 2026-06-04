@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Family Mapping</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html" class="active">Family Mapping</a>
+      <a href="/products/import.html">Import Products</a>
+      <a href="/products/import-history.html">Import History</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Family Mapping</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Family Mapping</div>
+            <div class="page-header__subtitle" id="list-subtitle"></div>
+          </div>
+          <button class="btn btn--primary" id="btn-assign">+ Assign Family</button>
+        </div>
+
+        <!-- Search + Filter -->
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+          <input type="text" id="search-input" class="form-control"
+                 placeholder="Cari kode, nama, SKU, atau family..." style="max-width:320px;">
+          <div class="filter-tabs" id="filter-mapped">
+            <button class="filter-tab active" data-mapped="">Semua</button>
+            <button class="filter-tab" data-mapped="yes">Sudah di-map</button>
+            <button class="filter-tab" data-mapped="no">Belum di-map</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Product Code</th>
+                <th>Product Name</th>
+                <th>SKU</th>
+                <th>Current Family</th>
+                <th>Confidence</th>
+                <th>Source</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="7" class="table-empty">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="pagination" style="display:flex; gap:8px; align-items:center; margin-top:16px; justify-content:flex-end;"></div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Assign Family -->
+<div id="modal-assign" class="modal-overlay hidden">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-assign-title">Assign Family</div>
+      <button class="modal__close" id="modal-assign-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-assign-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Product <span style="color:#dc2626">*</span></label>
+        <select id="select-product" class="form-control">
+          <option value="">— Pilih Product —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Family <span style="color:#dc2626">*</span></label>
+        <select id="select-family" class="form-control">
+          <option value="">— Pilih Family —</option>
+        </select>
+      </div>
+      <p class="text-small text-muted">
+        Mapping akan menggantikan family yang sudah ada untuk product ini.
+        Confidence: 100 · Source: MANUAL
+      </p>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-assign-cancel">Batal</button>
+      <button class="btn btn--primary"   id="modal-assign-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+  var PAGE_SIZE    = 20
+  var allProducts  = []
+  var allFamilies  = []
+  var allMappings  = []
+  var mappingByProduct = {}   // product_id → mapping doc
+  var familyMap    = {}       // family_id  → family_name
+  var filteredData = []       // merged rows
+  var currentPage  = 1
+  var currentMapped = ''
+  var canEdit      = false
+
+  // Pre-select from query param (linked from families.html)
+  var paramFamilyId = new URLSearchParams(window.location.search).get('family_id') || ''
+
+  FCOS.initPage().then(function (user) {
+    FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
+    canEdit = user.roles.some(function (r) {
+      return ['SUPER_ADMIN','ADMIN','COMMERCIAL_ADMIN'].includes(r)
+    })
+    if (!canEdit) document.getElementById('btn-assign').style.display = 'none'
+
+    document.getElementById('topbar-name').textContent  = user.name
+    document.getElementById('sidebar-footer').innerHTML =
+      '<div>' + escHtml(user.name) + '</div>' +
+      '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('main-content').classList.remove('hidden')
+    loadAll()
+  })
+
+  async function loadAll() {
+    var tbody = document.getElementById('table-body')
+    tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Memuat...</td></tr>'
+    try {
+      var results = await Promise.all([
+        FCOS.api('listProducts', 'GET'),
+        FCOS.api('listFamilies', 'GET'),
+        FCOS.api('listMappings', 'GET')
+      ])
+      allProducts = results[0].products || []
+      allFamilies = results[1].families || []
+      allMappings = results[2].mappings || []
+
+      familyMap = {}
+      allFamilies.forEach(function (f) { familyMap[f.family_id] = f.family_name })
+
+      mappingByProduct = {}
+      allMappings.forEach(function (m) { mappingByProduct[m.product_id] = m })
+
+      populateAssignSelects()
+      applyFilter()
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty text-danger">Gagal memuat: ' + escHtml(err.message) + '</td></tr>'
+    }
+  }
+
+  // ─── Populate modal selects ──────────────────────────────
+  function populateAssignSelects() {
+    var selP = document.getElementById('select-product')
+    var selF = document.getElementById('select-family')
+
+    selP.innerHTML = '<option value="">— Pilih Product —</option>'
+    allProducts
+      .filter(function (p) { return p.status === 'ACTIVE' })
+      .sort(function (a, b) { return (a.product_name || '').localeCompare(b.product_name || '') })
+      .forEach(function (p) {
+        var opt = document.createElement('option')
+        opt.value = p.product_id
+        opt.textContent = p.product_code + ' — ' + p.product_name
+        selP.appendChild(opt)
+      })
+
+    selF.innerHTML = '<option value="">— Pilih Family —</option>'
+    allFamilies
+      .filter(function (f) { return f.status === 'ACTIVE' })
+      .sort(function (a, b) { return (a.family_name || '').localeCompare(b.family_name || '') })
+      .forEach(function (f) {
+        var opt = document.createElement('option')
+        opt.value = f.family_id
+        opt.textContent = f.family_name
+        selF.appendChild(opt)
+      })
+
+    // Pre-select family if linked from families.html
+    if (paramFamilyId) selF.value = paramFamilyId
+  }
+
+  // ─── Filter + Search ─────────────────────────────────────
+  function applyFilter() {
+    var q = (document.getElementById('search-input').value || '').toLowerCase().trim()
+    filteredData = allProducts.filter(function (p) {
+      var m = mappingByProduct[p.product_id]
+      var familyName = m ? (familyMap[m.family_id] || '') : ''
+      if (currentMapped === 'yes' && !m) return false
+      if (currentMapped === 'no'  &&  m) return false
+      if (q) {
+        var hay = ((p.product_code || '') + ' ' + (p.product_name || '') + ' ' + (p.sku || '') + ' ' + familyName).toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+    currentPage = 1
+    renderTable()
+  }
+
+  function renderTable() {
+    var total = filteredData.length
+    var pages = Math.ceil(total / PAGE_SIZE) || 1
+    if (currentPage > pages) currentPage = pages
+    var start = (currentPage - 1) * PAGE_SIZE
+    var slice = filteredData.slice(start, start + PAGE_SIZE)
+
+    var mappedCount = allProducts.filter(function (p) { return !!mappingByProduct[p.product_id] }).length
+    document.getElementById('list-subtitle').textContent =
+      allProducts.length + ' products · ' + mappedCount + ' mapped · ' + (allProducts.length - mappedCount) + ' unmapped'
+
+    var tbody = document.getElementById('table-body')
+    if (slice.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Tidak ada data.</td></tr>'
+    } else {
+      tbody.innerHTML = slice.map(function (p) {
+        var m = mappingByProduct[p.product_id]
+        var familyName  = m ? escHtml(familyMap[m.family_id] || m.family_id) : '<span class="text-muted">—</span>'
+        var confidence  = m ? m.confidence + '%' : '—'
+        var source      = m ? m.mapping_source : '—'
+        var actions = '—'
+        if (canEdit) {
+          actions = '<button class="btn btn--secondary btn--sm" onclick="openAssign(\'' + escAttr(p.product_id) + '\')">Assign</button>'
+          if (m) actions += ' <button class="btn btn--danger btn--sm" onclick="doRemove(\'' + escAttr(p.product_id) + '\')">Hapus</button>'
+        }
+        return '<tr>' +
+          '<td class="text-small">' + escHtml(p.product_code || '—') + '</td>' +
+          '<td>' + escHtml(p.product_name) + '</td>' +
+          '<td class="text-small">' + escHtml(p.sku || '—') + '</td>' +
+          '<td>' + familyName + '</td>' +
+          '<td class="text-small">' + confidence + '</td>' +
+          '<td class="text-small">' + source + '</td>' +
+          '<td style="white-space:nowrap;">' + actions + '</td>' +
+          '</tr>'
+      }).join('')
+    }
+    renderPagination(pages)
+  }
+
+  function renderPagination(pages) {
+    var el = document.getElementById('pagination')
+    if (pages <= 1) { el.innerHTML = ''; return }
+    var html = ''
+    if (currentPage > 1)  html += '<button class="btn btn--secondary btn--sm" onclick="goPage(' + (currentPage-1) + ')">← Prev</button>'
+    html += '<span class="text-small text-muted" style="padding:0 8px;">Hal ' + currentPage + ' / ' + pages + '</span>'
+    if (currentPage < pages) html += '<button class="btn btn--secondary btn--sm" onclick="goPage(' + (currentPage+1) + ')">Next →</button>'
+    el.innerHTML = html
+  }
+  function goPage(n) { currentPage = n; renderTable() }
+
+  document.getElementById('filter-mapped').addEventListener('click', function (e) {
+    var tab = e.target.closest('.filter-tab')
+    if (!tab) return
+    document.querySelectorAll('#filter-mapped .filter-tab').forEach(function (t) { t.classList.remove('active') })
+    tab.classList.add('active')
+    currentMapped = tab.dataset.mapped
+    applyFilter()
+  })
+  document.getElementById('search-input').addEventListener('input', applyFilter)
+
+  // ─── Open Assign (global btn or per-row) ─────────────────
+  document.getElementById('btn-assign').addEventListener('click', function () {
+    document.getElementById('select-product').value = ''
+    document.getElementById('modal-assign-title').textContent = 'Assign Family'
+    hideErr('modal-assign-error')
+    document.getElementById('modal-assign').classList.remove('hidden')
+  })
+
+  function openAssign(product_id) {
+    var p = allProducts.find(function (x) { return x.product_id === product_id })
+    document.getElementById('modal-assign-title').textContent =
+      'Assign Family — ' + (p ? p.product_name : product_id)
+    document.getElementById('select-product').value = product_id
+    // Pre-select current family
+    var m = mappingByProduct[product_id]
+    document.getElementById('select-family').value = m ? m.family_id : (paramFamilyId || '')
+    hideErr('modal-assign-error')
+    document.getElementById('modal-assign').classList.remove('hidden')
+  }
+
+  document.getElementById('modal-assign-save').addEventListener('click', async function () {
+    var btn        = this
+    var product_id = document.getElementById('select-product').value
+    var family_id  = document.getElementById('select-family').value
+    if (!product_id || !family_id) {
+      showErr('modal-assign-error', 'Product dan Family wajib dipilih.')
+      return
+    }
+    hideErr('modal-assign-error')
+    FCOS.setLoading(btn, 'Menyimpan...')
+    try {
+      await FCOS.api('assignFamily', 'POST', { product_id, family_id })
+      closeAssignModal()
+      await loadAll()
+    } catch (err) {
+      showErr('modal-assign-error', err.message)
+    } finally {
+      FCOS.clearLoading(btn)
+    }
+  })
+
+  async function doRemove(product_id) {
+    var p = allProducts.find(function (x) { return x.product_id === product_id })
+    if (!window.confirm('Hapus mapping untuk "' + (p ? p.product_name : product_id) + '"?')) return
+    try {
+      await FCOS.api('removeMapping', 'POST', { product_id })
+      await loadAll()
+    } catch (err) { alert('Gagal: ' + err.message) }
+  }
+
+  document.getElementById('modal-assign-close').addEventListener('click', closeAssignModal)
+  document.getElementById('modal-assign-cancel').addEventListener('click', closeAssignModal)
+  function closeAssignModal() {
+    document.getElementById('modal-assign').classList.add('hidden')
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', function () { FCOS.logout() })
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+  function escAttr(str) { return escHtml(str) }
+  function showErr(id, msg) { var e = document.getElementById(id); e.textContent = msg; e.classList.remove('hidden') }
+  function hideErr(id)      { var e = document.getElementById(id); e.textContent = '';  e.classList.add('hidden') }
+</script>
+
+</body>
+</html>

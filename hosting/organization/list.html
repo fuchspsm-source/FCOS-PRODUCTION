@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Organization Hierarchy</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html" class="active">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Organization Hierarchy</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Organization Hierarchy</div>
+            <div class="page-header__subtitle" id="list-subtitle"></div>
+          </div>
+        </div>
+
+        <!-- NOTE: Cycle detection not implemented. A→B→C→A is possible. Fix before Approval Engine. -->
+        <div class="alert alert--warning" style="max-width:100%; margin-bottom:16px; font-size:0.85rem;">
+          <strong>Catatan:</strong> Cycle detection belum diimplementasi.
+          Loop manager (A → B → C → A) dapat terjadi dan tidak diblokir.
+          Akan diperbaiki sebelum Approval Engine.
+        </div>
+
+        <!-- Filters -->
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+          <div>
+            <label class="text-small text-muted" style="margin-right:6px;">Status:</label>
+            <div class="filter-tabs" id="filter-status" style="display:inline-flex;">
+              <button class="filter-tab active" data-status="">Semua</button>
+              <button class="filter-tab" data-status="PENDING">Pending</button>
+              <button class="filter-tab" data-status="ACTIVE">Active</button>
+              <button class="filter-tab" data-status="INACTIVE">Inactive</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-small text-muted" style="margin-right:6px;">Position:</label>
+            <div class="filter-tabs" id="filter-position" style="display:inline-flex;">
+              <button class="filter-tab active" data-position="">Semua</button>
+              <button class="filter-tab" data-position="AREA_MANAGER">AM</button>
+              <button class="filter-tab" data-position="REGIONAL_MANAGER">RM</button>
+              <button class="filter-tab" data-position="DIVISION_MANAGER">DM</button>
+              <button class="filter-tab" data-position="SALES_DIRECTOR">SD</button>
+              <button class="filter-tab" data-position="MANAGING_DIRECTOR">MD</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Email</th>
+                <th>Position</th>
+                <th>Manager</th>
+                <th>Status</th>
+                <th>Terdaftar</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="7" class="table-empty">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Edit Position -->
+<div id="modal-position" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title">Edit Position</div>
+      <button class="modal__close" id="modal-position-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <p class="text-small text-muted" id="modal-position-name" style="margin-bottom:12px;"></p>
+      <div id="modal-position-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Position</label>
+        <select id="select-position" class="form-input">
+          <option value="">— Tidak ada —</option>
+          <option value="AREA_MANAGER">Area Manager (AM)</option>
+          <option value="REGIONAL_MANAGER">Regional Manager (RM)</option>
+          <option value="DIVISION_MANAGER">Division Manager (DM)</option>
+          <option value="SALES_DIRECTOR">Sales Director (SD)</option>
+          <option value="MANAGING_DIRECTOR">Managing Director (MD)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-position-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-position-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Manager -->
+<div id="modal-manager" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title">Edit Manager</div>
+      <button class="modal__close" id="modal-manager-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <p class="text-small text-muted" id="modal-manager-name" style="margin-bottom:12px;"></p>
+      <div id="modal-manager-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Manager</label>
+        <select id="select-manager" class="form-input">
+          <option value="">— Tidak ada —</option>
+        </select>
+      </div>
+      <p class="text-small text-muted" style="margin-top:8px;">
+        ⚠️ Cycle detection belum aktif. Pastikan tidak membuat loop.
+      </p>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-manager-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-manager-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+  var allUsers       = []
+  var userMap        = {}      // uid → user
+  var currentStatus  = ''
+  var currentPosition = ''
+  var editingUid     = null
+  var isSuperAdmin   = false
+
+  // Position labels (short)
+  var POSITION_SHORT = {
+    AREA_MANAGER     : 'AM',
+    REGIONAL_MANAGER : 'RM',
+    DIVISION_MANAGER : 'DM',
+    SALES_DIRECTOR   : 'SD',
+    MANAGING_DIRECTOR: 'MD'
+  }
+
+  // ─── Init ───────────────────────────────────────────────
+  FCOS.initPage().then(function (user) {
+    FCOS.requirePageRole('SUPER_ADMIN')
+
+    isSuperAdmin = user.roles.includes('SUPER_ADMIN')
+
+    document.getElementById('topbar-name').textContent  = user.name
+    document.getElementById('sidebar-footer').innerHTML =
+      '<div>' + escHtml(user.name) + '</div>' +
+      '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('main-content').classList.remove('hidden')
+
+    loadUsers()
+  })
+
+  // ─── Load ────────────────────────────────────────────────
+  async function loadUsers() {
+    var tbody = document.getElementById('table-body')
+    tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Memuat...</td></tr>'
+
+    try {
+      var data  = await FCOS.api('listUsers', 'GET')
+      allUsers  = data.users || []
+
+      // Build uid→user map
+      userMap = {}
+      allUsers.forEach(function (u) { userMap[u.uid] = u })
+
+      renderTable()
+
+    } catch (err) {
+      tbody.innerHTML =
+        '<tr><td colspan="7" class="table-empty text-danger">' +
+        'Gagal memuat data: ' + escHtml(err.message) +
+        '</td></tr>'
+    }
+  }
+
+  // ─── Render ──────────────────────────────────────────────
+  function renderTable() {
+    var filtered = allUsers.filter(function (u) {
+      if (currentStatus   && u.status      !== currentStatus)   return false
+      if (currentPosition && u.position_id !== currentPosition) return false
+      return true
+    })
+
+    var filterLabel =
+      (currentStatus   ? currentStatus.toLowerCase()   : 'semua') +
+      (currentPosition ? ' / ' + (POSITION_SHORT[currentPosition] || currentPosition) : '')
+
+    document.getElementById('list-subtitle').textContent =
+      filtered.length + ' user (' + filterLabel + ')'
+
+    var tbody = document.getElementById('table-body')
+    if (filtered.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="7" class="table-empty">Tidak ada user.</td></tr>'
+      return
+    }
+
+    tbody.innerHTML = filtered.map(function (u) {
+      var posLabel     = POSITION_SHORT[u.position_id] || '—'
+      var managerName  = u.manager_user_id
+        ? (userMap[u.manager_user_id] ? escHtml(userMap[u.manager_user_id].name) : '<span class="text-muted text-small">UID: ' + escHtml(u.manager_user_id) + '</span>')
+        : '—'
+
+      var actions = isSuperAdmin
+        ? '<button class="btn btn--secondary btn--sm" onclick="openEditPosition(\'' + u.uid + '\')">Edit Position</button> ' +
+          '<button class="btn btn--secondary btn--sm" onclick="openEditManager(\'' + u.uid + '\')">Edit Manager</button> ' +
+          '<button class="btn btn--secondary btn--sm" onclick="goToDetail(\'' + u.uid + '\')">Detail</button>'
+        : '<button class="btn btn--secondary btn--sm" onclick="goToDetail(\'' + u.uid + '\')">Detail</button>'
+
+      return '<tr>' +
+        '<td>' + escHtml(u.name)  + '</td>' +
+        '<td class="text-small">' + escHtml(u.email) + '</td>' +
+        '<td>' + posLabel + '</td>' +
+        '<td>' + managerName + '</td>' +
+        '<td>' + FCOS.statusBadge(u.status) + '</td>' +
+        '<td class="text-small">' + FCOS.formatDate(u.created_at) + '</td>' +
+        '<td style="white-space:nowrap;">' + actions + '</td>' +
+        '</tr>'
+    }).join('')
+  }
+
+  // ─── Navigation ──────────────────────────────────────────
+  function goToDetail(uid) {
+    window.location.href = '/users/detail.html?uid=' + encodeURIComponent(uid)
+  }
+
+  // ─── Filters ─────────────────────────────────────────────
+  document.getElementById('filter-status').addEventListener('click', function (e) {
+    var tab = e.target.closest('.filter-tab')
+    if (!tab) return
+    document.querySelectorAll('#filter-status .filter-tab').forEach(function (t) {
+      t.classList.remove('active')
+    })
+    tab.classList.add('active')
+    currentStatus = tab.dataset.status
+    renderTable()
+  })
+
+  document.getElementById('filter-position').addEventListener('click', function (e) {
+    var tab = e.target.closest('.filter-tab')
+    if (!tab) return
+    document.querySelectorAll('#filter-position .filter-tab').forEach(function (t) {
+      t.classList.remove('active')
+    })
+    tab.classList.add('active')
+    currentPosition = tab.dataset.position
+    renderTable()
+  })
+
+  // ─── Modal: Edit Position ─────────────────────────────────
+  function openEditPosition(uid) {
+    editingUid = uid
+    var u = userMap[uid]
+    document.getElementById('modal-position-name').textContent = u.name + ' — ' + u.email
+    document.getElementById('select-position').value = u.position_id || ''
+    hideModalError('modal-position-error')
+    document.getElementById('modal-position').classList.remove('hidden')
+  }
+
+  document.getElementById('modal-position-close').addEventListener('click', closePositionModal)
+  document.getElementById('modal-position-cancel').addEventListener('click', closePositionModal)
+
+  function closePositionModal() {
+    document.getElementById('modal-position').classList.add('hidden')
+    editingUid = null
+  }
+
+  document.getElementById('modal-position-save').addEventListener('click', async function () {
+    var btn      = this
+    var position = document.getElementById('select-position').value
+    hideModalError('modal-position-error')
+    FCOS.setLoading(btn, 'Menyimpan...')
+    try {
+      await FCOS.api('updateUserPosition', 'POST', {
+        target_uid  : editingUid,
+        position_id : position || null
+      })
+      // Update local state
+      userMap[editingUid].position_id = position || null
+      var idx = allUsers.findIndex(function (u) { return u.uid === editingUid })
+      if (idx !== -1) allUsers[idx].position_id = position || null
+      closePositionModal()
+      renderTable()
+    } catch (err) {
+      showModalError('modal-position-error', err.message)
+    } finally {
+      FCOS.clearLoading(btn)
+    }
+  })
+
+  // ─── Modal: Edit Manager ──────────────────────────────────
+  function openEditManager(uid) {
+    editingUid = uid
+    var u = userMap[uid]
+    document.getElementById('modal-manager-name').textContent = u.name + ' — ' + u.email
+
+    // Populate manager select: all ACTIVE users except self
+    var sel = document.getElementById('select-manager')
+    sel.innerHTML = '<option value="">— Tidak ada —</option>'
+    allUsers
+      .filter(function (candidate) {
+        return candidate.uid !== uid && candidate.status === 'ACTIVE'
+      })
+      .sort(function (a, b) { return a.name.localeCompare(b.name) })
+      .forEach(function (candidate) {
+        var opt = document.createElement('option')
+        opt.value       = candidate.uid
+        opt.textContent = candidate.name +
+          (candidate.position_id ? ' (' + (POSITION_SHORT[candidate.position_id] || candidate.position_id) + ')' : '')
+        sel.appendChild(opt)
+      })
+
+    sel.value = u.manager_user_id || ''
+    hideModalError('modal-manager-error')
+    document.getElementById('modal-manager').classList.remove('hidden')
+  }
+
+  document.getElementById('modal-manager-close').addEventListener('click', closeManagerModal)
+  document.getElementById('modal-manager-cancel').addEventListener('click', closeManagerModal)
+
+  function closeManagerModal() {
+    document.getElementById('modal-manager').classList.add('hidden')
+    editingUid = null
+  }
+
+  document.getElementById('modal-manager-save').addEventListener('click', async function () {
+    var btn        = this
+    var managerUid = document.getElementById('select-manager').value
+    hideModalError('modal-manager-error')
+    FCOS.setLoading(btn, 'Menyimpan...')
+    try {
+      await FCOS.api('updateUserManager', 'POST', {
+        target_uid       : editingUid,
+        manager_user_id  : managerUid || null
+      })
+      // Update local state
+      userMap[editingUid].manager_user_id = managerUid || null
+      var idx = allUsers.findIndex(function (u) { return u.uid === editingUid })
+      if (idx !== -1) allUsers[idx].manager_user_id = managerUid || null
+      closeManagerModal()
+      renderTable()
+    } catch (err) {
+      showModalError('modal-manager-error', err.message)
+    } finally {
+      FCOS.clearLoading(btn)
+    }
+  })
+
+  // ─── Logout ───────────────────────────────────────────────
+  document.getElementById('btn-logout').addEventListener('click', function () {
+    FCOS.logout()
+  })
+
+  // ─── Helpers ─────────────────────────────────────────────
+  function escHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  function showModalError(id, msg) {
+    var el = document.getElementById(id)
+    el.textContent = msg
+    el.classList.remove('hidden')
+  }
+
+  function hideModalError(id) {
+    var el = document.getElementById(id)
+    el.textContent = ''
+    el.classList.add('hidden')
+  }
+</script>
+
+</body>
+</html>

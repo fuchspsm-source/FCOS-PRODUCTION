@@ -1,7 +1,7 @@
 /**
  * FCOS — matrix.js
- * Batch 4C Step 2: Approval Matrix UI logic
- * Consumes: listMatrix, getMatrix, createMatrix, closeMatrix
+ * Batch 5E Revised: Approval Matrix UI logic
+ * Consumes: listMatrix, getMatrix, createMatrix, closeMatrix, listUsers
  */
 
 (function () {
@@ -9,50 +9,134 @@
 
   // ── State ────────────────────────────────────────────────────
   let currentMatrixId = null;
+  let userCache       = [];
 
   // ── DOM refs ─────────────────────────────────────────────────
-  const elTableBody       = document.getElementById('matrix-table-body');
-  const elCreateModal     = document.getElementById('modal-create-matrix');
-  const elDetailModal     = document.getElementById('modal-matrix-detail');
-  const elBtnSave         = document.getElementById('btn-save-matrix');
-  const elBtnCloseMatrix  = document.getElementById('btn-close-matrix');
-  const elInputName       = document.getElementById('input-matrix-name');
-  const elSelectLevel1    = document.getElementById('select-level-1');
-  const elSelectLevel2    = document.getElementById('select-level-2');
-  const elSelectLevel3    = document.getElementById('select-level-3');
-  const elDetailName      = document.getElementById('detail-matrix-name');
-  const elDetailLevel1    = document.getElementById('detail-level-1');
-  const elDetailLevel2    = document.getElementById('detail-level-2');
-  const elDetailLevel3    = document.getElementById('detail-level-3');
-  const elDetailStatus    = document.getElementById('detail-status');
+  const elTableBody        = document.getElementById('matrix-table-body');
+  const elCreateModal      = document.getElementById('modal-create-matrix');
+  const elDetailModal      = document.getElementById('modal-matrix-detail');
+  const elBtnSave          = document.getElementById('btn-save-matrix');
+  const elBtnCloseMatrix   = document.getElementById('btn-close-matrix');
+  const elSelectSalesOwner = document.getElementById('select-sales-owner');
+  const elSelectRm         = document.getElementById('select-rm');
+  const elSelectDm         = document.getElementById('select-dm');
+  const elSelectSd         = document.getElementById('select-sd');
+  const elSelectMd         = document.getElementById('select-md');
+  const elInputEffFrom     = document.getElementById('input-effective-from');
+  const elDetailSalesOwner = document.getElementById('detail-sales-owner');
+  const elDetailRm         = document.getElementById('detail-rm');
+  const elDetailDm         = document.getElementById('detail-dm');
+  const elDetailSd         = document.getElementById('detail-sd');
+  const elDetailMd         = document.getElementById('detail-md');
+  const elDetailEffFrom    = document.getElementById('detail-effective-from');
+  const elDetailEffTo      = document.getElementById('detail-effective-to');
+  const elDetailStatus     = document.getElementById('detail-status');
+
+  // ── Role map (mirrors backend MATRIX_ROLE_MAP) ────────────────
+  const SLOT_ROLE_MAP = {
+    'select-sales-owner' : 'AREA_MANAGER',
+    'select-rm'          : 'REGIONAL_MANAGER',
+    'select-dm'          : 'DIVISION_MANAGER',
+    'select-sd'          : 'SALES_DIRECTOR',
+    'select-md'          : 'MANAGING_DIRECTOR',
+  };
 
   // ── Helpers ──────────────────────────────────────────────────
 
-  function openModal(el) {
-    el.classList.add('is-open');
-  }
+  function openModal(el)  { el.classList.add('is-open'); }
+  function closeModal(el) { el.classList.remove('is-open'); }
 
-  function closeModal(el) {
-    el.classList.remove('is-open');
-  }
-
-  function statusBadge(status) {
-    const active = String(status).toUpperCase() === 'ACTIVE';
+  function statusBadge(isActive) {
+    const active = isActive === true || String(isActive).toUpperCase() === 'ACTIVE';
     const label  = active ? 'Active' : 'Inactive';
     const cls    = active ? 'badge-active' : 'badge-inactive';
     return `<span class="badge ${cls}">${label}</span>`;
   }
 
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g,  '&amp;')
+      .replace(/</g,  '&lt;')
+      .replace(/>/g,  '&gt;')
+      .replace(/"/g,  '&quot;')
+      .replace(/'/g,  '&#39;');
+  }
+
+  function getUserName(uid) {
+    const u = userCache.find(function (u) { return u.uid === uid; });
+    return u ? u.name : uid;
+  }
+
+  function formatDate(val) {
+    if (!val) return '—';
+    // Firestore Timestamp shape: { _seconds, _nanoseconds } or { seconds }
+    let ts = val;
+    if (val && typeof val === 'object' && (val._seconds || val.seconds)) {
+      ts = new Date((val._seconds || val.seconds) * 1000);
+    } else {
+      ts = new Date(val);
+    }
+    if (isNaN(ts.getTime())) return String(val);
+    return ts.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
   function clearCreateForm() {
-    elInputName.value    = '';
-    elSelectLevel1.value = '';
-    elSelectLevel2.value = '';
-    elSelectLevel3.value = '';
+    elSelectSalesOwner.value = '';
+    elSelectRm.value         = '';
+    elSelectDm.value         = '';
+    elSelectSd.value         = '';
+    elSelectMd.value         = '';
+    elInputEffFrom.value     = '';
   }
 
   function showError(err) {
     console.error(err);
     alert(err.message || 'Operation failed');
+  }
+
+  // ── Users ─────────────────────────────────────────────────────
+
+  async function loadUsers() {
+    try {
+      const result = await listUsers('ACTIVE');
+      userCache = result.users || [];
+      populateAllSelects();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  function populateSelect(el, role) {
+    const filtered = userCache.filter(function (u) {
+      return Array.isArray(u.roles) && u.roles.includes(role);
+    });
+
+    // Keep the default disabled option, remove any previously injected options
+    while (el.options.length > 1) el.remove(1);
+
+    if (filtered.length === 0) {
+      const opt = document.createElement('option');
+      opt.value    = '';
+      opt.disabled = true;
+      opt.textContent = '— No users with this role —';
+      el.appendChild(opt);
+      return;
+    }
+
+    filtered.forEach(function (u) {
+      const opt = document.createElement('option');
+      opt.value       = u.uid;
+      opt.textContent = u.name + ' (' + u.email + ')';
+      el.appendChild(opt);
+    });
+  }
+
+  function populateAllSelects() {
+    populateSelect(elSelectSalesOwner, 'AREA_MANAGER');
+    populateSelect(elSelectRm,         'REGIONAL_MANAGER');
+    populateSelect(elSelectDm,         'DIVISION_MANAGER');
+    populateSelect(elSelectSd,         'SALES_DIRECTOR');
+    populateSelect(elSelectMd,         'MANAGING_DIRECTOR');
   }
 
   // ── List ─────────────────────────────────────────────────────
@@ -80,8 +164,8 @@
     elTableBody.innerHTML = records.map(function (row) {
       return `
         <tr>
-          <td>${escapeHtml(row.name || '—')}</td>
-          <td>${statusBadge(row.status || 'ACTIVE')}</td>
+          <td>${escapeHtml(getUserName(row.sales_owner_id))}</td>
+          <td>${statusBadge(row.is_active)}</td>
           <td class="col-action">
             <button
               class="btn btn-ghost"
@@ -91,15 +175,6 @@
           </td>
         </tr>`;
     }).join('');
-  }
-
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   // ── View ─────────────────────────────────────────────────────
@@ -118,31 +193,38 @@
     currentMatrixId = matrixId;
     elBtnCloseMatrix.dataset.matrixId = matrixId;
 
-    const levels = data.levels || [];
-
-    elDetailName.textContent   = data.name        || '—';
-    elDetailLevel1.textContent = levels[0]        || '—';
-    elDetailLevel2.textContent = levels[1]        || '—';
-    elDetailLevel3.textContent = levels[2]        || '—';
-    elDetailStatus.innerHTML   = statusBadge(data.status || 'ACTIVE');
+    elDetailSalesOwner.textContent = getUserName(data.sales_owner_id);
+    elDetailRm.textContent         = getUserName(data.rm_id);
+    elDetailDm.textContent         = getUserName(data.dm_id);
+    elDetailSd.textContent         = getUserName(data.sd_id);
+    elDetailMd.textContent         = getUserName(data.md_id);
+    elDetailEffFrom.textContent    = formatDate(data.effective_from);
+    elDetailEffTo.textContent      = data.effective_to ? formatDate(data.effective_to) : '—';
+    elDetailStatus.innerHTML       = statusBadge(data.is_active);
   }
 
   // ── Create ────────────────────────────────────────────────────
 
   async function handleSaveMatrix() {
-    const name   = elInputName.value.trim();
-    const level1 = elSelectLevel1.value;
-    const level2 = elSelectLevel2.value;
-    const level3 = elSelectLevel3.value;
+    const salesOwnerId = elSelectSalesOwner.value;
+    const rmId         = elSelectRm.value;
+    const dmId         = elSelectDm.value;
+    const sdId         = elSelectSd.value;
+    const mdId         = elSelectMd.value;
+    const effFrom      = elInputEffFrom.value;
 
-    if (!name || !level1 || !level2 || !level3) {
+    if (!salesOwnerId || !rmId || !dmId || !sdId || !mdId || !effFrom) {
       alert('Please fill in all required fields.');
       return;
     }
 
     const payload = {
-      name,
-      levels: [level1, level2, level3],
+      sales_owner_id : salesOwnerId,
+      rm_id          : rmId,
+      dm_id          : dmId,
+      sd_id          : sdId,
+      md_id          : mdId,
+      effective_from : effFrom,
     };
 
     try {
@@ -162,7 +244,6 @@
 
   async function handleCloseMatrix() {
     if (!currentMatrixId) return;
-
     const confirmed = confirm('Close this matrix? This action cannot be undone.');
     if (!confirmed) return;
 
@@ -182,17 +263,13 @@
   // ── Event wiring ──────────────────────────────────────────────
 
   function bindEvents() {
-    // Table: delegate View button clicks
     elTableBody.addEventListener('click', function (e) {
       const btn = e.target.closest('[data-matrix-id]');
       if (!btn) return;
       handleViewMatrix(btn.dataset.matrixId);
     });
 
-    // Save matrix
     elBtnSave.addEventListener('click', handleSaveMatrix);
-
-    // Close matrix
     elBtnCloseMatrix.addEventListener('click', handleCloseMatrix);
   }
 
@@ -201,7 +278,9 @@
   document.addEventListener('DOMContentLoaded', function () {
     bindEvents();
     FCOS.initPage().then(function () {
-      loadMatrixList();
+      loadUsers().then(function () {
+        loadMatrixList();
+      });
     });
   });
 

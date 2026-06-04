@@ -99,3 +99,9 @@ async function closeMatrix(matrixId) {
   return api('closeMatrix', 'POST', { matrixId });
 }
 Object.assign(window.FCOS, { listMatrix, getMatrix, createMatrix, closeMatrix });
+
+async function listUsers(status) {
+  const params = status ? { status } : {};
+  return api('listUsers', 'GET', null, params);
+}
+Object.assign(window.FCOS, { listUsers });

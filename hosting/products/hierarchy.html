@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Product Hierarchy</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/hierarchy.html" class="active">Product Hierarchy</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Product Hierarchy</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Product Hierarchy</div>
+            <div class="page-header__subtitle">Ordo → Family → Genus → Product Code</div>
+          </div>
+        </div>
+
+        <div class="filter-tabs" id="tab-bar" style="margin-bottom:20px;">
+          <button class="filter-tab active" data-tab="brands">Brands</button>
+          <button class="filter-tab" data-tab="families">Families</button>
+          <button class="filter-tab" data-tab="genus">Master SKU</button>
+          <button class="filter-tab" data-tab="codes">Product Codes</button>
+        </div>
+
+        <!-- TAB: BRANDS -->
+        <div id="tab-brands">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <input type="text" class="form-input" id="search-brands" placeholder="Cari kode / nama brand..." style="max-width:300px;">
+            <button class="btn btn--primary btn--sm" id="btn-new-brand">+ Brand Baru</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Kode</th><th>Nama</th><th>Status</th><th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-brands">
+                <tr><td colspan="4" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB: FAMILIES -->
+        <div id="tab-families" class="hidden">
+          <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+            <select class="form-input" id="filter-family-brand" style="max-width:240px;">
+              <option value="">— Semua Brand —</option>
+            </select>
+            <input type="text" class="form-input" id="search-families" placeholder="Cari kode / nama family..." style="max-width:280px;">
+            <button class="btn btn--primary btn--sm" id="btn-new-family" style="margin-left:auto;">+ Family Baru</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Brand</th><th>Kode</th><th>Nama</th><th>Status</th><th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-families">
+                <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB: GENUS -->
+        <div id="tab-genus" class="hidden">
+          <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+            <select class="form-input" id="filter-genus-family" style="max-width:240px;">
+              <option value="">— Semua Family —</option>
+            </select>
+            <input type="text" class="form-input" id="search-genus" placeholder="Cari kode / nama genus..." style="max-width:280px;">
+            <button class="btn btn--primary btn--sm" id="btn-new-genus" style="margin-left:auto;">+ Master SKU Baru</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Family</th><th>Kode</th><th>Nama</th><th>Status</th><th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-genus">
+                <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB: PRODUCT CODES -->
+        <div id="tab-codes" class="hidden">
+          <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+            <select class="form-input" id="filter-code-genus" style="max-width:240px;">
+              <option value="">— Semua Master SKU —</option>
+            </select>
+            <input type="text" class="form-input" id="search-codes" placeholder="Cari product code / deskripsi..." style="max-width:280px;">
+            <button class="btn btn--primary btn--sm" id="btn-new-code" style="margin-left:auto;">+ Product Code Baru</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Master SKU</th><th>Product Code</th><th>Deskripsi</th><th>Status</th><th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-codes">
+                <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: BRAND -->
+<div id="modal-brand" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-brand-title">Brand Baru</div>
+      <button class="modal__close" id="modal-brand-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-brand-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Kode Brand <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-brand-code" placeholder="Contoh: RENOLIN" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Brand <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-brand-name" placeholder="Contoh: Renolin">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-brand-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-brand-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: FAMILY -->
+<div id="modal-family" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-family-title">Family Baru</div>
+      <button class="modal__close" id="modal-family-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-family-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Brand <span style="color:red">*</span></label>
+        <select class="form-input" id="input-family-brand">
+          <option value="">— Pilih Brand —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kode Family <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-family-code" placeholder="Contoh: CLP" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Family <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-family-name" placeholder="Contoh: Renolin CLP">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-family-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-family-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: GENUS -->
+<div id="modal-genus" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-genus-title">Master SKU Baru</div>
+      <button class="modal__close" id="modal-genus-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-genus-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Family <span style="color:red">*</span></label>
+        <select class="form-input" id="input-genus-family">
+          <option value="">— Pilih Family —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kode Genus <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-genus-code" placeholder="Contoh: CLP220" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Genus <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-genus-name" placeholder="Contoh: Renolin CLP 220">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-genus-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-genus-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PRODUCT CODE -->
+<div id="modal-code" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-code-title">Product Code Baru</div>
+      <button class="modal__close" id="modal-code-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-code-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Master SKU <span style="color:red">*</span></label>
+        <select class="form-input" id="input-code-genus">
+          <option value="">— Pilih Master SKU —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Code <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="input-code-productcode" placeholder="Contoh: 60012345" style="text-transform:uppercase;">
+        <div class="text-small text-muted" id="hint-code-productcode" style="margin-top:4px;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Deskripsi</label>
+        <input type="text" class="form-input" id="input-code-description" placeholder="Contoh: RENOLIN CLP 220 20L">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-code-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-code-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+var allOrdos    = []
+var allFamilies = []
+var allGenus    = []
+var allCodes    = []
+var ordoMap     = {}
+var familyMap   = {}
+var genusMap    = {}
+var currentTab  = 'brands'
+var editingBrandId  = null
+var editingFamilyId = null
+var editingGenusId  = null
+var editingCodeId   = null
+
+FCOS.initPage().then(function (user) {
+  FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
+  document.getElementById('topbar-name').textContent  = user.name
+  document.getElementById('sidebar-footer').innerHTML =
+    '<div>' + escHtml(user.name) + '</div>' +
+    '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+  document.getElementById('loading').style.display = 'none'
+  document.getElementById('main-content').classList.remove('hidden')
+  loadAll()
+})
+
+async function loadAll() {
+  try {
+    var ro = await FCOS.api('listOrdos',        'GET')
+    var fa = await FCOS.api('listFamilies3C',   'GET')
+    var ge = await FCOS.api('listGenus',        'GET')
+    var co = await FCOS.api('listProductCodes', 'GET')
+    allOrdos    = ro.ordos        || []
+    allFamilies = fa.families     || []
+    allGenus    = ge.genus        || []
+    allCodes    = co.productCodes || []
+    ordoMap = {}
+    allOrdos.forEach(function (o) { ordoMap[o.id] = o })
+    familyMap = {}
+    allFamilies.forEach(function (f) { familyMap[f.id] = f })
+    genusMap = {}
+    allGenus.forEach(function (g) { genusMap[g.id] = g })
+    populateDropdowns()
+    renderBrands()
+    renderFamilies()
+    renderGenus()
+    renderCodes()
+  } catch (err) {
+    alert('Gagal memuat data: ' + err.message)
+  }
+}
+
+function populateDropdowns() {
+  var selFilterBrand = document.getElementById('filter-family-brand')
+  selFilterBrand.innerHTML = '<option value="">— Semua Brand —</option>'
+  allOrdos.forEach(function (o) {
+    var opt = document.createElement('option')
+    opt.value = o.id
+    opt.textContent = o.code + ' — ' + o.name
+    selFilterBrand.appendChild(opt)
+  })
+
+  var selFilterFamily = document.getElementById('filter-genus-family')
+  selFilterFamily.innerHTML = '<option value="">— Semua Family —</option>'
+  allFamilies.forEach(function (f) {
+    var opt = document.createElement('option')
+    opt.value = f.id
+    var brand = ordoMap[f.ordoId]
+    opt.textContent = (brand ? brand.code + ' / ' : '') + f.code + ' — ' + f.name
+    selFilterFamily.appendChild(opt)
+  })
+
+  var selFilterGenus = document.getElementById('filter-code-genus')
+  selFilterGenus.innerHTML = '<option value="">— Semua Master SKU —</option>'
+  allGenus.forEach(function (g) {
+    var opt = document.createElement('option')
+    opt.value = g.id
+    var fam = familyMap[g.familyId]
+    opt.textContent = (fam ? fam.code + ' / ' : '') + g.code + ' — ' + g.name
+    selFilterGenus.appendChild(opt)
+  })
+
+  var selModalBrand = document.getElementById('input-family-brand')
+  selModalBrand.innerHTML = '<option value="">— Pilih Brand —</option>'
+  allOrdos.filter(function(o){ return o.active }).forEach(function (o) {
+    var opt = document.createElement('option')
+    opt.value = o.id
+    opt.textContent = o.code + ' — ' + o.name
+    selModalBrand.appendChild(opt)
+  })
+
+  var selModalFamily = document.getElementById('input-genus-family')
+  selModalFamily.innerHTML = '<option value="">— Pilih Family —</option>'
+  allFamilies.filter(function(f){ return f.active }).forEach(function (f) {
+    var opt = document.createElement('option')
+    opt.value = f.id
+    var brand = ordoMap[f.ordoId]
+    opt.textContent = (brand ? brand.code + ' / ' : '') + f.code + ' — ' + f.name
+    selModalFamily.appendChild(opt)
+  })
+
+  var selModalGenus = document.getElementById('input-code-genus')
+  selModalGenus.innerHTML = '<option value="">— Pilih Master SKU —</option>'
+  allGenus.filter(function(g){ return g.active }).forEach(function (g) {
+    var opt = document.createElement('option')
+    opt.value = g.id
+    var fam = familyMap[g.familyId]
+    opt.textContent = (fam ? fam.code + ' / ' : '') + g.code + ' — ' + g.name
+    selModalGenus.appendChild(opt)
+  })
+}
+
+document.getElementById('tab-bar').addEventListener('click', function (e) {
+  var btn = e.target.closest('.filter-tab')
+  if (!btn) return
+  var tab = btn.dataset.tab
+  if (tab === currentTab) return
+  document.querySelectorAll('#tab-bar .filter-tab').forEach(function (t) { t.classList.remove('active') })
+  btn.classList.add('active')
+  document.getElementById('tab-' + currentTab).classList.add('hidden')
+  currentTab = tab
+  document.getElementById('tab-' + currentTab).classList.remove('hidden')
+})
+
+function renderBrands() {
+  var search = document.getElementById('search-brands').value.toLowerCase()
+  var list = allOrdos.filter(function (o) {
+    if (!search) return true
+    return o.code.toLowerCase().includes(search) || o.name.toLowerCase().includes(search)
+  })
+  var tbody = document.getElementById('tbody-brands')
+  if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Tidak ada data.</td></tr>'; return }
+  tbody.innerHTML = list.map(function (o) {
+    var tl = o.active ? 'Nonaktifkan' : 'Aktifkan'
+    var tc = o.active ? 'btn--secondary' : 'btn--primary'
+    return '<tr>' +
+      '<td><strong>' + escHtml(o.code) + '</strong></td>' +
+      '<td>' + escHtml(o.name) + '</td>' +
+      '<td>' + FCOS.statusBadge(o.active ? 'ACTIVE' : 'INACTIVE') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn--secondary btn--sm" onclick="openEditBrand(\'' + o.id + '\')">Edit</button> ' +
+        '<button class="btn ' + tc + ' btn--sm" onclick="toggleBrand(\'' + o.id + '\',' + o.active + ')">' + tl + '</button> ' +
+        '<button class="btn btn--secondary btn--sm" style="color:#dc2626;" onclick="deleteBrand(\'' + o.id + '\')">Hapus</button>' +
+      '</td></tr>'
+  }).join('')
+}
+document.getElementById('search-brands').addEventListener('input', renderBrands)
+
+function renderFamilies() {
+  var search = document.getElementById('search-families').value.toLowerCase()
+  var filterBrand = document.getElementById('filter-family-brand').value
+  var list = allFamilies.filter(function (f) {
+    if (filterBrand && f.ordoId !== filterBrand) return false
+    if (search && !f.code.toLowerCase().includes(search) && !f.name.toLowerCase().includes(search)) return false
+    return true
+  })
+  var tbody = document.getElementById('tbody-families')
+  if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Tidak ada data.</td></tr>'; return }
+  tbody.innerHTML = list.map(function (f) {
+    var brand = ordoMap[f.ordoId]
+    var bl = brand ? escHtml(brand.code) : '<span class="text-muted">—</span>'
+    var tl = f.active ? 'Nonaktifkan' : 'Aktifkan'
+    var tc = f.active ? 'btn--secondary' : 'btn--primary'
+    return '<tr>' +
+      '<td>' + bl + '</td>' +
+      '<td><strong>' + escHtml(f.code) + '</strong></td>' +
+      '<td>' + escHtml(f.name) + '</td>' +
+      '<td>' + FCOS.statusBadge(f.active ? 'ACTIVE' : 'INACTIVE') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn--secondary btn--sm" onclick="openEditFamily(\'' + f.id + '\')">Edit</button> ' +
+        '<button class="btn ' + tc + ' btn--sm" onclick="toggleFamily(\'' + f.id + '\',' + f.active + ')">' + tl + '</button> ' +
+        '<button class="btn btn--secondary btn--sm" style="color:#dc2626;" onclick="deleteFamily(\'' + f.id + '\')">Hapus</button>' +
+      '</td></tr>'
+  }).join('')
+}
+document.getElementById('search-families').addEventListener('input', renderFamilies)
+document.getElementById('filter-family-brand').addEventListener('change', renderFamilies)
+
+function renderGenus() {
+  var search = document.getElementById('search-genus').value.toLowerCase()
+  var filterFamily = document.getElementById('filter-genus-family').value
+  var list = allGenus.filter(function (g) {
+    if (filterFamily && g.familyId !== filterFamily) return false
+    if (search && !g.code.toLowerCase().includes(search) && !g.name.toLowerCase().includes(search)) return false
+    return true
+  })
+  var tbody = document.getElementById('tbody-genus')
+  if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Tidak ada data.</td></tr>'; return }
+  tbody.innerHTML = list.map(function (g) {
+    var fam = familyMap[g.familyId]
+    var fl = fam ? escHtml(fam.code) : '<span class="text-muted">—</span>'
+    var tl = g.active ? 'Nonaktifkan' : 'Aktifkan'
+    var tc = g.active ? 'btn--secondary' : 'btn--primary'
+    return '<tr>' +
+      '<td>' + fl + '</td>' +
+      '<td><strong>' + escHtml(g.code) + '</strong></td>' +
+      '<td>' + escHtml(g.name) + '</td>' +
+      '<td>' + FCOS.statusBadge(g.active ? 'ACTIVE' : 'INACTIVE') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn--secondary btn--sm" onclick="openEditGenus(\'' + g.id + '\')">Edit</button> ' +
+        '<button class="btn ' + tc + ' btn--sm" onclick="toggleGenus(\'' + g.id + '\',' + g.active + ')">' + tl + '</button> ' +
+        '<button class="btn btn--secondary btn--sm" style="color:#dc2626;" onclick="deleteGenus(\'' + g.id + '\')">Hapus</button>' +
+      '</td></tr>'
+  }).join('')
+}
+document.getElementById('search-genus').addEventListener('input', renderGenus)
+document.getElementById('filter-genus-family').addEventListener('change', renderGenus)
+
+function renderCodes() {
+  var search = document.getElementById('search-codes').value.toLowerCase()
+  var filterGenus = document.getElementById('filter-code-genus').value
+  var list = allCodes.filter(function (c) {
+    if (filterGenus && c.genusId !== filterGenus) return false
+    if (search && !c.productCode.toLowerCase().includes(search) && !(c.description||'').toLowerCase().includes(search)) return false
+    return true
+  })
+  var tbody = document.getElementById('tbody-codes')
+  if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Tidak ada data.</td></tr>'; return }
+  tbody.innerHTML = list.map(function (c) {
+    var g = genusMap[c.genusId]
+    var gl = g ? escHtml(g.name) : '<span class="text-muted">—</span>'
+    var tl = c.active ? 'Nonaktifkan' : 'Aktifkan'
+    var tc = c.active ? 'btn--secondary' : 'btn--primary'
+    return '<tr>' +
+      '<td>' + gl + '</td>' +
+      '<td><strong>' + escHtml(c.productCode) + '</strong></td>' +
+      '<td>' + escHtml(c.description || '—') + '</td>' +
+      '<td>' + FCOS.statusBadge(c.active ? 'ACTIVE' : 'INACTIVE') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn--secondary btn--sm" onclick="openEditCode(\'' + c.id + '\')">Edit</button> ' +
+        '<button class="btn ' + tc + ' btn--sm" onclick="toggleCode(\'' + c.id + '\',' + c.active + ')">' + tl + '</button>' +
+      '</td></tr>'
+  }).join('')
+}
+document.getElementById('search-codes').addEventListener('input', renderCodes)
+document.getElementById('filter-code-genus').addEventListener('change', renderCodes)
+
+// BRAND MODAL
+document.getElementById('btn-new-brand').addEventListener('click', function () {
+  editingBrandId = null
+  document.getElementById('modal-brand-title').textContent = 'Brand Baru'
+  document.getElementById('input-brand-code').value = ''
+  document.getElementById('input-brand-code').disabled = false
+  document.getElementById('input-brand-name').value = ''
+  hideErr('modal-brand-error')
+  document.getElementById('modal-brand').classList.remove('hidden')
+})
+function openEditBrand(id) {
+  editingBrandId = id
+  var o = ordoMap[id]
+  document.getElementById('modal-brand-title').textContent = 'Edit Brand'
+  document.getElementById('input-brand-code').value = o.code
+  document.getElementById('input-brand-code').disabled = true
+  document.getElementById('input-brand-name').value = o.name
+  hideErr('modal-brand-error')
+  document.getElementById('modal-brand').classList.remove('hidden')
+}
+document.getElementById('modal-brand-close').addEventListener('click', function () { document.getElementById('modal-brand').classList.add('hidden') })
+document.getElementById('modal-brand-cancel').addEventListener('click', function () { document.getElementById('modal-brand').classList.add('hidden') })
+document.getElementById('modal-brand-save').addEventListener('click', async function () {
+  var btn  = this
+  var code = document.getElementById('input-brand-code').value.trim().toUpperCase()
+  var name = document.getElementById('input-brand-name').value.trim()
+  hideErr('modal-brand-error')
+  if (!code) { showErr('modal-brand-error', 'Brand Code wajib diisi.'); return }
+  if (!name) { showErr('modal-brand-error', 'Brand Name wajib diisi.'); return }
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    if (editingBrandId) {
+      await FCOS.api('updateOrdo', 'POST', { id: editingBrandId, name: name })
+      ordoMap[editingBrandId].name = name
+      var idx = allOrdos.findIndex(function(o){ return o.id === editingBrandId })
+      if (idx !== -1) allOrdos[idx].name = name
+    } else {
+      var res = await FCOS.api('createOrdo', 'POST', { code: code, name: name })
+      var newOrdo = { id: res.id, code: code, name: name, active: true }
+      allOrdos.push(newOrdo)
+      ordoMap[res.id] = newOrdo
+    }
+    document.getElementById('modal-brand').classList.add('hidden')
+    populateDropdowns()
+    renderBrands()
+  } catch (err) {
+    showErr('modal-brand-error', err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+async function toggleBrand(id, currentActive) {
+  if (!confirm((currentActive ? 'Nonaktifkan' : 'Aktifkan') + ' brand ini?')) return
+  try {
+    await FCOS.api('updateOrdo', 'POST', { id: id, active: !currentActive })
+    ordoMap[id].active = !currentActive
+    var idx = allOrdos.findIndex(function(o){ return o.id === id })
+    if (idx !== -1) allOrdos[idx].active = !currentActive
+    renderBrands()
+  } catch (err) { alert('Gagal: ' + err.message) }
+}
+async function deleteBrand(id) {
+  if (!confirm('Hapus brand ini? Tidak bisa di-undo.')) return
+  try {
+    await FCOS.api('deleteOrdo', 'POST', { id: id })
+    allOrdos = allOrdos.filter(function(o){ return o.id !== id })
+    delete ordoMap[id]
+    populateDropdowns()
+    renderBrands()
+  } catch (err) { alert('Gagal hapus: ' + err.message) }
+}
+
+// FAMILY MODAL
+document.getElementById('btn-new-family').addEventListener('click', function () {
+  editingFamilyId = null
+  document.getElementById('modal-family-title').textContent = 'Family Baru'
+  document.getElementById('input-family-brand').value = ''
+  document.getElementById('input-family-brand').disabled = false
+  document.getElementById('input-family-code').value = ''
+  document.getElementById('input-family-code').disabled = false
+  document.getElementById('input-family-name').value = ''
+  hideErr('modal-family-error')
+  document.getElementById('modal-family').classList.remove('hidden')
+})
+function openEditFamily(id) {
+  editingFamilyId = id
+  var f = familyMap[id]
+  document.getElementById('modal-family-title').textContent = 'Edit Family'
+  document.getElementById('input-family-brand').value = f.ordoId
+  document.getElementById('input-family-brand').disabled = true
+  document.getElementById('input-family-code').value = f.code
+  document.getElementById('input-family-code').disabled = true
+  document.getElementById('input-family-name').value = f.name
+  hideErr('modal-family-error')
+  document.getElementById('modal-family').classList.remove('hidden')
+}
+document.getElementById('modal-family-close').addEventListener('click', function () { document.getElementById('modal-family').classList.add('hidden') })
+document.getElementById('modal-family-cancel').addEventListener('click', function () { document.getElementById('modal-family').classList.add('hidden') })
+document.getElementById('modal-family-save').addEventListener('click', async function () {
+  var btn   = this
+  var brand = document.getElementById('input-family-brand').value
+  var code  = document.getElementById('input-family-code').value.trim().toUpperCase()
+  var name  = document.getElementById('input-family-name').value.trim()
+  hideErr('modal-family-error')
+  if (!brand) { showErr('modal-family-error', 'Brand wajib dipilih.'); return }
+  if (!code)  { showErr('modal-family-error', 'Family Code wajib diisi.'); return }
+  if (!name)  { showErr('modal-family-error', 'Family Name wajib diisi.'); return }
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    if (editingFamilyId) {
+      await FCOS.api('updateFamily3C', 'POST', { id: editingFamilyId, name: name })
+      familyMap[editingFamilyId].name = name
+      var idx = allFamilies.findIndex(function(f){ return f.id === editingFamilyId })
+      if (idx !== -1) allFamilies[idx].name = name
+    } else {
+      var res = await FCOS.api('createFamily3C', 'POST', { ordoId: brand, code: code, name: name })
+      var newFam = { id: res.id, ordoId: brand, code: code, name: name, active: true }
+      allFamilies.push(newFam)
+      familyMap[res.id] = newFam
+    }
+    document.getElementById('modal-family').classList.add('hidden')
+    populateDropdowns()
+    renderFamilies()
+  } catch (err) {
+    showErr('modal-family-error', err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+async function toggleFamily(id, currentActive) {
+  if (!confirm((currentActive ? 'Nonaktifkan' : 'Aktifkan') + ' family ini?')) return
+  try {
+    await FCOS.api('updateFamily3C', 'POST', { id: id, active: !currentActive })
+    familyMap[id].active = !currentActive
+    var idx = allFamilies.findIndex(function(f){ return f.id === id })
+    if (idx !== -1) allFamilies[idx].active = !currentActive
+    renderFamilies()
+  } catch (err) { alert('Gagal: ' + err.message) }
+}
+async function deleteFamily(id) {
+  if (!confirm('Hapus family ini? Tidak bisa di-undo.')) return
+  try {
+    await FCOS.api('deleteFamily3C', 'POST', { id: id })
+    allFamilies = allFamilies.filter(function(f){ return f.id !== id })
+    delete familyMap[id]
+    populateDropdowns()
+    renderFamilies()
+  } catch (err) { alert('Gagal hapus: ' + err.message) }
+}
+
+// GENUS MODAL
+document.getElementById('btn-new-genus').addEventListener('click', function () {
+  editingGenusId = null
+  document.getElementById('modal-genus-title').textContent = 'Master SKU Baru'
+  document.getElementById('input-genus-family').value = ''
+  document.getElementById('input-genus-family').disabled = false
+  document.getElementById('input-genus-code').value = ''
+  document.getElementById('input-genus-code').disabled = false
+  document.getElementById('input-genus-name').value = ''
+  hideErr('modal-genus-error')
+  document.getElementById('modal-genus').classList.remove('hidden')
+})
+function openEditGenus(id) {
+  editingGenusId = id
+  var g = genusMap[id]
+  document.getElementById('modal-genus-title').textContent = 'Edit Master SKU'
+  document.getElementById('input-genus-family').value = g.familyId
+  document.getElementById('input-genus-family').disabled = true
+  document.getElementById('input-genus-code').value = g.code
+  document.getElementById('input-genus-code').disabled = true
+  document.getElementById('input-genus-name').value = g.name
+  hideErr('modal-genus-error')
+  document.getElementById('modal-genus').classList.remove('hidden')
+}
+document.getElementById('modal-genus-close').addEventListener('click', function () { document.getElementById('modal-genus').classList.add('hidden') })
+document.getElementById('modal-genus-cancel').addEventListener('click', function () { document.getElementById('modal-genus').classList.add('hidden') })
+document.getElementById('modal-genus-save').addEventListener('click', async function () {
+  var btn    = this
+  var family = document.getElementById('input-genus-family').value
+  var code   = document.getElementById('input-genus-code').value.trim().toUpperCase()
+  var name   = document.getElementById('input-genus-name').value.trim()
+  hideErr('modal-genus-error')
+  if (!family) { showErr('modal-genus-error', 'Family wajib dipilih.'); return }
+  if (!code)   { showErr('modal-genus-error', 'Genus Code wajib diisi.'); return }
+  if (!name)   { showErr('modal-genus-error', 'Genus Name wajib diisi.'); return }
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    if (editingGenusId) {
+      await FCOS.api('updateGenus', 'POST', { id: editingGenusId, name: name })
+      genusMap[editingGenusId].name = name
+      var idx = allGenus.findIndex(function(g){ return g.id === editingGenusId })
+      if (idx !== -1) allGenus[idx].name = name
+    } else {
+      var res = await FCOS.api('createGenus', 'POST', { familyId: family, code: code, name: name })
+      var newGenus = { id: res.id, familyId: family, code: code, name: name, active: true }
+      allGenus.push(newGenus)
+      genusMap[res.id] = newGenus
+    }
+    document.getElementById('modal-genus').classList.add('hidden')
+    populateDropdowns()
+    renderGenus()
+  } catch (err) {
+    showErr('modal-genus-error', err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+async function toggleGenus(id, currentActive) {
+  if (!confirm((currentActive ? 'Nonaktifkan' : 'Aktifkan') + ' master SKU ini?')) return
+  try {
+    await FCOS.api('updateGenus', 'POST', { id: id, active: !currentActive })
+    genusMap[id].active = !currentActive
+    var idx = allGenus.findIndex(function(g){ return g.id === id })
+    if (idx !== -1) allGenus[idx].active = !currentActive
+    renderGenus()
+  } catch (err) { alert('Gagal: ' + err.message) }
+}
+async function deleteGenus(id) {
+  if (!confirm('Hapus master SKU ini? Tidak bisa di-undo.')) return
+  try {
+    await FCOS.api('deleteGenus', 'POST', { id: id })
+    allGenus = allGenus.filter(function(g){ return g.id !== id })
+    delete genusMap[id]
+    populateDropdowns()
+    renderGenus()
+  } catch (err) { alert('Gagal hapus: ' + err.message) }
+}
+
+// PRODUCT CODE MODAL
+document.getElementById('btn-new-code').addEventListener('click', function () {
+  editingCodeId = null
+  document.getElementById('modal-code-title').textContent = 'Product Code Baru'
+  document.getElementById('input-code-genus').value = ''
+  document.getElementById('input-code-genus').disabled = false
+  document.getElementById('input-code-productcode').value = ''
+  document.getElementById('input-code-productcode').disabled = false
+  document.getElementById('hint-code-productcode').textContent = ''
+  document.getElementById('input-code-description').value = ''
+  hideErr('modal-code-error')
+  document.getElementById('modal-code').classList.remove('hidden')
+})
+function openEditCode(id) {
+  editingCodeId = id
+  var c = allCodes.find(function(x){ return x.id === id })
+  document.getElementById('modal-code-title').textContent = 'Edit Product Code'
+  document.getElementById('input-code-genus').value = c.genusId
+  document.getElementById('input-code-genus').disabled = true
+  document.getElementById('input-code-productcode').value = c.productCode
+  document.getElementById('input-code-productcode').disabled = true
+  document.getElementById('hint-code-productcode').textContent = 'Product Code tidak dapat diubah setelah dibuat.'
+  document.getElementById('input-code-description').value = c.description || ''
+  hideErr('modal-code-error')
+  document.getElementById('modal-code').classList.remove('hidden')
+}
+document.getElementById('modal-code-close').addEventListener('click', function () { document.getElementById('modal-code').classList.add('hidden') })
+document.getElementById('modal-code-cancel').addEventListener('click', function () { document.getElementById('modal-code').classList.add('hidden') })
+document.getElementById('modal-code-save').addEventListener('click', async function () {
+  var btn  = this
+  var genus = document.getElementById('input-code-genus').value
+  var pc    = document.getElementById('input-code-productcode').value.trim().toUpperCase()
+  var desc  = document.getElementById('input-code-description').value.trim()
+  hideErr('modal-code-error')
+  if (!genus) { showErr('modal-code-error', 'Master SKU wajib dipilih.'); return }
+  if (!pc)    { showErr('modal-code-error', 'Product Code wajib diisi.'); return }
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    if (editingCodeId) {
+      await FCOS.api('updateProductCode', 'POST', { id: editingCodeId, description: desc })
+      var c = allCodes.find(function(x){ return x.id === editingCodeId })
+      if (c) c.description = desc
+    } else {
+      var res = await FCOS.api('createProductCode', 'POST', { genusId: genus, productCode: pc, description: desc })
+      var newCode = { id: res.id, genusId: genus, productCode: pc, description: desc, active: true }
+      allCodes.push(newCode)
+    }
+    document.getElementById('modal-code').classList.add('hidden')
+    renderCodes()
+  } catch (err) {
+    showErr('modal-code-error', err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+async function toggleCode(id, currentActive) {
+  if (!confirm((currentActive ? 'Nonaktifkan' : 'Aktifkan') + ' product code ini?')) return
+  try {
+    await FCOS.api('updateProductCode', 'POST', { id: id, active: !currentActive })
+    var c = allCodes.find(function(x){ return x.id === id })
+    if (c) c.active = !currentActive
+    renderCodes()
+  } catch (err) { alert('Gagal: ' + err.message) }
+}
+
+document.getElementById('btn-logout').addEventListener('click', function () { FCOS.logout() })
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+function showErr(id, msg) {
+  var el = document.getElementById(id)
+  el.textContent = msg
+  el.classList.remove('hidden')
+}
+function hideErr(id) {
+  var el = document.getElementById(id)
+  el.textContent = ''
+  el.classList.add('hidden')
+}
+</script>
+
+</body>
+</html>

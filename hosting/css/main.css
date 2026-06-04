@@ -82,3 +82,33 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 .d-flex { display: flex; } .align-center { align-items: center; } .justify-end { justify-content: flex-end; }
 .gap-8 { gap: 8px; } .gap-12 { gap: 12px; }
 .hidden { display: none !important; }
+
+/* ── Modal ──────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: #fff; border-radius: 8px;
+  width: 100%; max-width: 440px; margin: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  display: flex; flex-direction: column;
+}
+.modal__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+}
+.modal__title { font-weight: 600; font-size: 1rem; }
+.modal__close {
+  background: none; border: none; font-size: 1.4rem;
+  line-height: 1; cursor: pointer; color: #64748b;
+  padding: 0 4px;
+}
+.modal__close:hover { color: #1e293b; }
+.modal__body  { padding: 20px; }
+.modal__footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 20px; border-top: 1px solid #e2e8f0;
+}

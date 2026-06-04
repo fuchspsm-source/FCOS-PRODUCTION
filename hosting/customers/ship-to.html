@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Customer Ship-To</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/hierarchy.html">Product Hierarchy</a>
+      <div class="sidebar__section-label">Customer</div>
+      <a href="/customers/customer-registry.html">Customer Registry</a>
+      <a href="/customers/ship-to.html" class="active">Customer Ship-To</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Customer Ship-To</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Customer Ship-To</div>
+            <div class="page-header__subtitle" id="list-subtitle"></div>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+          <input type="text" class="form-input" id="search-input"
+            placeholder="Cari ship-to code / nama / sold-to..." style="max-width:320px;">
+          <select class="form-input" id="filter-soldto" style="max-width:280px;">
+            <option value="">— Semua Sold-To —</option>
+          </select>
+          <div class="filter-tabs" id="filter-status">
+            <button class="filter-tab active" data-status="">Semua</button>
+            <button class="filter-tab" data-status="active">Active</button>
+            <button class="filter-tab" data-status="inactive">Inactive</button>
+          </div>
+          <button class="btn btn--primary btn--sm" id="btn-new-shipto" style="margin-left:auto;">
+            + Ship-To Baru
+          </button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Ship-To Code</th>
+                <th>Ship-To Name</th>
+                <th>Sold-To</th>
+                <th>City</th>
+                <th>Province</th>
+                <th>Island</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-shipto">
+              <tr><td colspan="8" class="table-empty">Memuat...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<!-- MODAL: CREATE                                          -->
+<!-- ====================================================== -->
+<div id="modal-create" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title">Ship-To Baru</div>
+      <button class="modal__close" id="modal-create-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-create-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Parent Sold-To <span style="color:red">*</span></label>
+        <select class="form-input" id="create-soldto">
+          <option value="">— Pilih Sold-To —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ship-To Code <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="create-code"
+          placeholder="Contoh: 6000088" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ship-To Name <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="create-name"
+          placeholder="Contoh: Arrow Asia Indonesia Cakung">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <input type="text" class="form-input" id="create-address" placeholder="Alamat pengiriman">
+      </div>
+      <div class="form-group">
+        <label class="form-label">City</label>
+        <input type="text" class="form-input" id="create-city" placeholder="Kota">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Province</label>
+        <input type="text" class="form-input" id="create-province" placeholder="Provinsi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Island</label>
+        <input type="text" class="form-input" id="create-island" placeholder="Pulau">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-create-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-create-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<!-- MODAL: EDIT                                            -->
+<!-- ====================================================== -->
+<div id="modal-edit" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal__header">
+      <div class="modal__title">Edit Ship-To</div>
+      <button class="modal__close" id="modal-edit-close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div id="modal-edit-error" class="alert alert--error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Parent Sold-To</label>
+        <input type="text" class="form-input" id="edit-soldto" disabled
+          style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+        <div class="text-small text-muted" style="margin-top:4px;">
+          Parent Sold-To tidak dapat diubah setelah dibuat.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ship-To Code</label>
+        <input type="text" class="form-input" id="edit-code" disabled
+          style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+        <div class="text-small text-muted" style="margin-top:4px;">
+          Ship-To Code tidak dapat diubah setelah dibuat.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ship-To Name <span style="color:red">*</span></label>
+        <input type="text" class="form-input" id="edit-name" placeholder="Nama Ship-To">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <input type="text" class="form-input" id="edit-address" placeholder="Alamat pengiriman">
+      </div>
+      <div class="form-group">
+        <label class="form-label">City</label>
+        <input type="text" class="form-input" id="edit-city" placeholder="Kota">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Province</label>
+        <input type="text" class="form-input" id="edit-province" placeholder="Provinsi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Island</label>
+        <input type="text" class="form-input" id="edit-island" placeholder="Pulau">
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-edit-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-edit-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+var allShipTos    = []
+var allSoldTos    = []
+var shipToMap     = {}
+var currentStatus = ''
+var currentSoldTo = ''
+var editingId     = null
+
+// ============================================================
+// INIT
+// ============================================================
+FCOS.initPage().then(function (user) {
+  FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
+
+  document.getElementById('topbar-name').textContent  = user.name
+  document.getElementById('sidebar-footer').innerHTML =
+    '<div>' + escHtml(user.name) + '</div>' +
+    '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+
+  document.getElementById('loading').style.display = 'none'
+  document.getElementById('main-content').classList.remove('hidden')
+
+  loadAll()
+})
+
+// ============================================================
+// LOAD ALL
+// ============================================================
+async function loadAll() {
+  try {
+    var [stRes, cRes] = await Promise.all([
+      FCOS.api('listShipTos',   'GET'),
+      FCOS.api('listCustomers', 'GET'),
+    ])
+    allShipTos = stRes.shipTos   || []
+    allSoldTos = (cRes.customers || []).filter(function (c) { return c.active })
+
+    shipToMap = {}
+    allShipTos.forEach(function (s) { shipToMap[s.id] = s })
+
+    populateSoldToDropdowns()
+    renderTable()
+  } catch (err) {
+    document.getElementById('tbody-shipto').innerHTML =
+      '<tr><td colspan="8" class="table-empty text-danger">Gagal memuat: ' +
+      escHtml(err.message) + '</td></tr>'
+  }
+}
+
+// ============================================================
+// POPULATE SOLD-TO DROPDOWNS
+// ============================================================
+function populateSoldToDropdowns() {
+  // Filter dropdown
+  var filterSel = document.getElementById('filter-soldto')
+  filterSel.innerHTML = '<option value="">— Semua Sold-To —</option>'
+  allSoldTos.forEach(function (c) {
+    var opt = document.createElement('option')
+    opt.value = c.id
+    opt.textContent = c.customerCode + ' — ' + c.customerName
+    filterSel.appendChild(opt)
+  })
+
+  // Create modal dropdown
+  var createSel = document.getElementById('create-soldto')
+  createSel.innerHTML = '<option value="">— Pilih Sold-To —</option>'
+  allSoldTos.forEach(function (c) {
+    var opt = document.createElement('option')
+    opt.value = c.id
+    opt.textContent = c.customerCode + ' — ' + c.customerName
+    createSel.appendChild(opt)
+  })
+}
+
+// ============================================================
+// RENDER TABLE
+// ============================================================
+function renderTable() {
+  var search = document.getElementById('search-input').value.toLowerCase()
+
+  var list = allShipTos.filter(function (s) {
+    if (currentStatus === 'active'   && !s.active) return false
+    if (currentStatus === 'inactive' &&  s.active) return false
+    if (currentSoldTo && s.soldToId !== currentSoldTo) return false
+    if (search &&
+      !s.shipToCode?.toLowerCase().includes(search) &&
+      !s.shipToName?.toLowerCase().includes(search) &&
+      !s.soldToCode?.toLowerCase().includes(search) &&
+      !s.soldToName?.toLowerCase().includes(search)) return false
+    return true
+  })
+
+  document.getElementById('list-subtitle').textContent = list.length + ' ship-to'
+
+  var tbody = document.getElementById('tbody-shipto')
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Tidak ada data.</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = list.map(function (s) {
+    var soldToLabel = escHtml(s.soldToCode + ' — ' + s.soldToName)
+    var toggleLabel = s.active ? 'Nonaktifkan' : 'Aktifkan'
+    var toggleClass = s.active ? 'btn--secondary' : 'btn--primary'
+    return '<tr>' +
+      '<td><strong>' + escHtml(s.shipToCode) + '</strong></td>' +
+      '<td>' + escHtml(s.shipToName) + '</td>' +
+      '<td class="text-small">' + soldToLabel + '</td>' +
+      '<td>' + escHtml(s.city     || '—') + '</td>' +
+      '<td>' + escHtml(s.province || '—') + '</td>' +
+      '<td>' + escHtml(s.island   || '—') + '</td>' +
+      '<td>' + FCOS.statusBadge(s.active ? 'ACTIVE' : 'INACTIVE') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn--secondary btn--sm" onclick="openEdit(\'' + s.id + '\')">Edit</button> ' +
+        '<button class="btn ' + toggleClass + ' btn--sm" onclick="toggleStatus(\'' + s.id + '\')">' + toggleLabel + '</button>' +
+      '</td>' +
+      '</tr>'
+  }).join('')
+}
+
+// ============================================================
+// SEARCH & FILTER
+// ============================================================
+document.getElementById('search-input').addEventListener('input', renderTable)
+
+document.getElementById('filter-soldto').addEventListener('change', function () {
+  currentSoldTo = this.value
+  renderTable()
+})
+
+document.getElementById('filter-status').addEventListener('click', function (e) {
+  var tab = e.target.closest('.filter-tab')
+  if (!tab) return
+  document.querySelectorAll('#filter-status .filter-tab').forEach(function (t) {
+    t.classList.remove('active')
+  })
+  tab.classList.add('active')
+  currentStatus = tab.dataset.status
+  renderTable()
+})
+
+// ============================================================
+// MODAL: CREATE
+// ============================================================
+document.getElementById('btn-new-shipto').addEventListener('click', function () {
+  document.getElementById('create-soldto').value   = ''
+  document.getElementById('create-code').value     = ''
+  document.getElementById('create-name').value     = ''
+  document.getElementById('create-address').value  = ''
+  document.getElementById('create-city').value     = ''
+  document.getElementById('create-province').value = ''
+  document.getElementById('create-island').value   = ''
+  hideErr('modal-create-error')
+  document.getElementById('modal-create').classList.remove('hidden')
+})
+
+document.getElementById('modal-create-close').addEventListener('click', function () {
+  document.getElementById('modal-create').classList.add('hidden')
+})
+document.getElementById('modal-create-cancel').addEventListener('click', function () {
+  document.getElementById('modal-create').classList.add('hidden')
+})
+
+document.getElementById('modal-create-save').addEventListener('click', async function () {
+  var btn      = this
+  var soldToId = document.getElementById('create-soldto').value
+  var code     = document.getElementById('create-code').value.trim().toUpperCase()
+  var name     = document.getElementById('create-name').value.trim()
+  var address  = document.getElementById('create-address').value.trim()
+  var city     = document.getElementById('create-city').value.trim()
+  var province = document.getElementById('create-province').value.trim()
+  var island   = document.getElementById('create-island').value.trim()
+  hideErr('modal-create-error')
+
+  if (!soldToId) { showErr('modal-create-error', 'Parent Sold-To wajib dipilih.'); return }
+  if (!code)     { showErr('modal-create-error', 'Ship-To Code wajib diisi.'); return }
+  if (!name)     { showErr('modal-create-error', 'Ship-To Name wajib diisi.'); return }
+
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    var res = await FCOS.api('createShipTo', 'POST', {
+      soldToId, shipToCode: code, shipToName: name,
+      address, city, province, island,
+    })
+    // Find soldTo for denormalized fields
+    var soldTo = allSoldTos.find(function (c) { return c.id === soldToId })
+    var newShipTo = {
+      id: res.id, shipToCode: code, shipToName: name,
+      soldToId,
+      soldToCode: soldTo ? soldTo.customerCode : '',
+      soldToName: soldTo ? soldTo.customerName : '',
+      address, city, province, island, active: true,
+    }
+    allShipTos.push(newShipTo)
+    shipToMap[res.id] = newShipTo
+    document.getElementById('modal-create').classList.add('hidden')
+    renderTable()
+  } catch (err) {
+    var msg = err.message
+    if (msg === 'Ship-To Code already exists.')
+      msg = 'Ship-To Code sudah ada. Silakan masukkan kode lainnya.'
+    showErr('modal-create-error', msg)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+
+// ============================================================
+// MODAL: EDIT
+// ============================================================
+function openEdit(id) {
+  editingId = id
+  var s = shipToMap[id]
+  document.getElementById('edit-soldto').value   = s.soldToCode + ' — ' + s.soldToName
+  document.getElementById('edit-code').value     = s.shipToCode
+  document.getElementById('edit-name').value     = s.shipToName  || ''
+  document.getElementById('edit-address').value  = s.address     || ''
+  document.getElementById('edit-city').value     = s.city        || ''
+  document.getElementById('edit-province').value = s.province    || ''
+  document.getElementById('edit-island').value   = s.island      || ''
+  hideErr('modal-edit-error')
+  document.getElementById('modal-edit').classList.remove('hidden')
+}
+
+document.getElementById('modal-edit-close').addEventListener('click', function () {
+  document.getElementById('modal-edit').classList.add('hidden')
+})
+document.getElementById('modal-edit-cancel').addEventListener('click', function () {
+  document.getElementById('modal-edit').classList.add('hidden')
+})
+
+document.getElementById('modal-edit-save').addEventListener('click', async function () {
+  var btn      = this
+  var name     = document.getElementById('edit-name').value.trim()
+  var address  = document.getElementById('edit-address').value.trim()
+  var city     = document.getElementById('edit-city').value.trim()
+  var province = document.getElementById('edit-province').value.trim()
+  var island   = document.getElementById('edit-island').value.trim()
+  hideErr('modal-edit-error')
+
+  if (!name) { showErr('modal-edit-error', 'Ship-To Name wajib diisi.'); return }
+
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    await FCOS.api('updateShipTo', 'POST', {
+      id: editingId, shipToName: name,
+      address, city, province, island,
+    })
+    var s = shipToMap[editingId]
+    s.shipToName = name
+    s.address = address; s.city = city; s.province = province; s.island = island
+    document.getElementById('modal-edit').classList.add('hidden')
+    renderTable()
+  } catch (err) {
+    showErr('modal-edit-error', err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+})
+
+// ============================================================
+// TOGGLE STATUS
+// ============================================================
+async function toggleStatus(id) {
+  var s      = shipToMap[id]
+  var action = s.active ? 'deactivateShipTo' : 'activateShipTo'
+  var label  = s.active ? 'nonaktifkan' : 'aktifkan'
+  if (!confirm('Yakin ' + label + ' ship-to ' + s.shipToCode + '?')) return
+  try {
+    await FCOS.api(action, 'POST', { id: id })
+    s.active = !s.active
+    renderTable()
+  } catch (err) {
+    alert('Gagal: ' + err.message)
+  }
+}
+
+// ============================================================
+// LOGOUT
+// ============================================================
+document.getElementById('btn-logout').addEventListener('click', function () {
+  FCOS.logout()
+})
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+function showErr(id, msg) {
+  var el = document.getElementById(id)
+  el.textContent = msg
+  el.classList.remove('hidden')
+}
+function hideErr(id) {
+  var el = document.getElementById(id)
+  el.textContent = ''
+  el.classList.add('hidden')
+}
+</script>
+
+</body>
+</html>

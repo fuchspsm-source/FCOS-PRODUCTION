@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Sales Budget</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/hierarchy.html">Product Hierarchy</a>
+      <div class="sidebar__section-label">Customer</div>
+      <a href="/customers/customer-registry.html">Sales Budget Registry</a>
+      <a href="/customers/ship-to.html">Ship-To Registry</a>
+      <div class="sidebar__section-label">Commercial</div>
+      <a href="/sales-budget/sales-budget.html" class="active">Sales Budget</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Sales Budget</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Sales Budget</div>
+            <div class="page-header__subtitle" id="list-subtitle">Annual commercial budget per Sold-To customer</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="filter-tabs" id="tab-bar" style="margin-bottom:20px;">
+          <button class="filter-tab active" data-tab="registry">Budget Registry</button>
+          <button class="filter-tab" data-tab="create" id="tab-create">Manual Entry</button>
+          <button class="filter-tab" data-tab="import" id="tab-import">Import Excel</button>
+        </div>
+
+        <!-- TAB: REGISTRY -->
+        <div id="tab-registry">
+          <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Tahun</div>
+              <select class="form-input" id="filter-year" style="width:100px;"></select>
+            </div>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Customer Code</div>
+              <input type="text" class="form-input" id="filter-customer" placeholder="e.g. 62000037" style="width:180px;">
+            </div>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Segment</div>
+              <select class="form-input" id="filter-segment" style="width:240px;">
+                <option value="">Semua Segment</option>
+              </select>
+            </div>
+            <div style="align-self:flex-end;">
+              <button class="btn btn--primary btn--sm" onclick="loadBudgets()">Cari</button>
+            </div>
+            <div style="align-self:flex-end; margin-left:auto;">
+              <button class="btn btn--secondary btn--sm" onclick="exportExcel()">Export Excel</button>
+            </div>
+          </div>
+          <div class="table-wrapper" style="overflow-x:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Segment</th>
+                  <th style="text-align:right;">Jan</th>
+                  <th style="text-align:right;">Feb</th>
+                  <th style="text-align:right;">Mar</th>
+                  <th style="text-align:right;">Apr</th>
+                  <th style="text-align:right;">May</th>
+                  <th style="text-align:right;">Jun</th>
+                  <th style="text-align:right;">Jul</th>
+                  <th style="text-align:right;">Aug</th>
+                  <th style="text-align:right;">Sep</th>
+                  <th style="text-align:right;">Oct</th>
+                  <th style="text-align:right;">Nov</th>
+                  <th style="text-align:right;">Dec</th>
+                  <th style="text-align:right;">Total</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-budgets">
+                <tr><td colspan="16" class="table-empty">Gunakan filter di atas untuk memuat data.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB: CREATE -->
+        <div id="tab-create-panel" class="hidden">
+          <div class="card" style="max-width:860px;">
+            <div class="card__title">Budget Record Baru</div>
+            <div id="create-error" class="alert alert--error hidden"></div>
+            <div id="create-success" class="alert alert--success hidden"></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Tahun <span style="color:red">*</span></label>
+                <select class="form-input" id="create-year"></select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Customer Code (Sold-To) <span style="color:red">*</span></label>
+                <input type="text" class="form-input" id="create-customer" placeholder="e.g. 62000037">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Budget Segment <span style="color:red">*</span></label>
+              <select class="form-input" id="create-segment">
+                <option value="">— Pilih Segment —</option>
+              </select>
+            </div>
+            <hr class="divider">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Monthly Budget Values (IDR)</label>
+              <div id="create-months" style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:8px;"></div>
+            </div>
+            <hr class="divider">
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+              <button class="btn btn--secondary" onclick="resetCreate()">Reset</button>
+              <button class="btn btn--primary" id="btn-create" onclick="submitCreate()">Simpan</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: IMPORT -->
+        <div id="tab-import-panel" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card__title">Panduan Import</div>
+            <div style="font-size:0.88rem; line-height:1.9; color:#475569;">
+              <strong style="color:#1a1a2e;">Kolom wajib:</strong>
+              CustomerCode &nbsp;|&nbsp; BudgetSegment &nbsp;|&nbsp; Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec<br>
+              <strong style="color:#1a1a2e;">Kelengkapan:</strong>
+              Setiap CustomerCode harus memiliki tepat 14 segment. Kurang = ditolak seluruhnya.<br>
+              <strong style="color:#1a1a2e;">Update:</strong>
+              SUPER_ADMIN dapat menimpa data existing. COMMERCIAL_ADMIN hanya untuk data baru.<br>
+              <strong style="color:#1a1a2e;">Nilai:</strong> IDR numerik. Sel kosong = 0. Nilai negatif ditolak.
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn btn--secondary btn--sm" onclick="downloadTemplate()">Download Template</button>
+            </div>
+          </div>
+          <div style="margin-bottom:16px;">
+            <div style="font-size:0.78rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Tahun Budget <span style="color:red">*</span></div>
+            <select class="form-input" id="import-year" style="width:120px;"></select>
+          </div>
+          <div id="import-zone"
+               style="border:2px dashed #cbd5e1; border-radius:8px; padding:40px; text-align:center; cursor:pointer; margin-bottom:16px;"
+               onclick="document.getElementById('file-input').click()">
+            <div style="font-size:2rem; margin-bottom:8px;">&#128194;</div>
+            <div style="color:#374151; font-weight:600;">Klik untuk memilih</div>
+            <div style="color:#64748b; font-size:0.88rem; margin-top:4px;">atau drag &amp; drop file Excel (.xlsx / .xls)</div>
+          </div>
+          <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleFile(event)">
+          <div id="import-alert-ok"  class="alert alert--success hidden"></div>
+          <div id="import-alert-err" class="alert alert--error hidden"></div>
+          <div id="import-preview" class="hidden">
+            <div class="table-wrapper" style="overflow-x:auto; margin-bottom:16px;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Customer</th><th>Segment</th>
+                    <th style="text-align:right;">Jan</th><th style="text-align:right;">Feb</th>
+                    <th style="text-align:right;">Mar</th><th style="text-align:right;">Apr</th>
+                    <th style="text-align:right;">May</th><th style="text-align:right;">Jun</th>
+                    <th style="text-align:right;">Jul</th><th style="text-align:right;">Aug</th>
+                    <th style="text-align:right;">Sep</th><th style="text-align:right;">Oct</th>
+                    <th style="text-align:right;">Nov</th><th style="text-align:right;">Dec</th>
+                    <th style="text-align:right;">Total</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="preview-tbody"></tbody>
+              </table>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+              <button class="btn btn--secondary" onclick="resetImport()">Bersihkan</button>
+              <button class="btn btn--success" id="btn-submit-import" onclick="submitImport()">Submit Import</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT BUDGET -->
+<div id="modal-edit" class="modal-overlay hidden">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-edit-title">Edit Budget</div>
+      <button class="modal__close" id="modal-edit-close">&times;</button>
+    </div>
+    <div class="modal__body" style="overflow-y:auto; max-height:65vh;">
+      <div id="modal-edit-error" class="alert alert--error hidden"></div>
+      <div id="modal-edit-meta" style="font-size:0.85rem; color:#64748b; margin-bottom:16px;"></div>
+      <div id="edit-months" style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px;"></div>
+      <hr class="divider">
+      <div style="font-size:0.9rem;">Total: <strong id="edit-total" style="color:#1a56db;">Rp 0</strong></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="modal-edit-cancel">Batal</button>
+      <button class="btn btn--primary" id="modal-edit-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+
+var SEGMENTS = [
+  'AAM (Not Assigned)','AAM (Two Wheeler)','AAM Passenger Car',
+  'Industry (Automotive MFG)','Industry (Not Assigned)',
+  'MINING (Cement Ind.)','MINING (Not Assigned)','MINING (Soft Rock)',
+  'OEM (Commercial Vehicle MFG)','OEM (Off Highway Equipment MFG)','OEM (Passenger Car MFG)',
+  'Specialties (Food Ind.)','Specialties (Not Assigned)','Specialties (Packaging Materials)'
+]
+var MONTHS  = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+var MLABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+var isSuperAdmin = false;
+var isCreateRole = false;
+var currentData  = [];
+var importRows   = [];
+var currentTab   = 'registry';
+var editingId    = null;
+
+FCOS.initPage().then(function(user) {
+  isSuperAdmin = (user.roles || []).includes('SUPER_ADMIN')
+  isCreateRole = isSuperAdmin || (user.roles || []).includes('COMMERCIAL_ADMIN')
+  document.getElementById('topbar-name').textContent  = user.name
+  document.getElementById('sidebar-footer').innerHTML =
+    '<div>' + escHtml(user.name) + '</div>' +
+    '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+  if (!isCreateRole) {
+    document.getElementById('tab-create').style.display = 'none'
+    document.getElementById('tab-import').style.display = 'none'
+  }
+  document.getElementById('loading').style.display = 'none'
+  document.getElementById('main-content').classList.remove('hidden')
+  initUI()
+})
+
+function initUI() {
+  var cy = new Date().getFullYear()
+  var yrs = []
+  for (var y = cy + 1; y >= 2022; y--) yrs.push(y)
+  ;['filter-year','create-year','import-year'].forEach(function(id) {
+    var el = document.getElementById(id)
+    if (!el) return
+    el.innerHTML = yrs.map(function(y) {
+      return '<option value="' + y + '"' + (y === cy ? ' selected' : '') + '>' + y + '</option>'
+    }).join('')
+  })
+  var segOpts = SEGMENTS.map(function(s) {
+    return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'
+  }).join('')
+  document.getElementById('filter-segment').innerHTML += segOpts
+  document.getElementById('create-segment').innerHTML += segOpts
+  document.getElementById('create-months').innerHTML = MONTHS.map(function(m, i) {
+    return '<div class="form-group" style="margin-bottom:0;">' +
+      '<label class="form-label">' + MLABELS[i] + '</label>' +
+      '<input type="number" class="form-input" id="cm-' + m + '" value="0" min="0" style="text-align:right;">' +
+      '</div>'
+  }).join('')
+}
+
+document.getElementById('tab-bar').addEventListener('click', function(e) {
+  var btn = e.target.closest('.filter-tab')
+  if (!btn) return
+  var tab = btn.dataset.tab
+  if (tab === currentTab) return
+  document.querySelectorAll('#tab-bar .filter-tab').forEach(function(t) { t.classList.remove('active') })
+  btn.classList.add('active')
+  document.getElementById('tab-registry').classList.add('hidden')
+  document.getElementById('tab-create-panel').classList.add('hidden')
+  document.getElementById('tab-import-panel').classList.add('hidden')
+  currentTab = tab
+  if (tab === 'registry') document.getElementById('tab-registry').classList.remove('hidden')
+  if (tab === 'create')   document.getElementById('tab-create-panel').classList.remove('hidden')
+  if (tab === 'import')   document.getElementById('tab-import-panel').classList.remove('hidden')
+})
+
+function fmtN(n) {
+  if (!n && n !== 0) return '-'
+  return Number(n).toLocaleString('id-ID')
+}
+function fmtIDR(n) {
+  return 'Rp ' + Number(n || 0).toLocaleString('id-ID')
+}
+
+function loadBudgets() {
+  var year     = document.getElementById('filter-year').value
+  var customer = document.getElementById('filter-customer').value.trim()
+  var segment  = document.getElementById('filter-segment').value
+  var tbody    = document.getElementById('tbody-budgets')
+  tbody.innerHTML = '<tr><td colspan="16" class="table-empty">Memuat...</td></tr>'
+  document.getElementById('list-subtitle').textContent = ''
+  var params = 'year=' + year
+  if (customer) params += '&customerCode=' + encodeURIComponent(customer)
+  if (segment)  params += '&segment='      + encodeURIComponent(segment)
+  FCOS.api('listSalesBudgets?' + params, 'GET').then(function(data) {
+    currentData = data.records || []
+    renderTable(currentData, year)
+  }).catch(function(err) {
+    tbody.innerHTML = '<tr><td colspan="16" class="table-empty text-danger">Gagal memuat: ' + escHtml(err.message) + '</td></tr>'
+  })
+}
+
+function renderTable(records, year) {
+  var tbody = document.getElementById('tbody-budgets')
+  if (!records.length) {
+    tbody.innerHTML = '<tr><td colspan="16" class="table-empty">Tidak ada data.</td></tr>'
+    document.getElementById('list-subtitle').textContent = '0 records'
+    return
+  }
+  var uq = new Set(records.map(function(r) { return r.customerCode })).size
+  var gt = records.reduce(function(s, r) { return s + (r.totalBudget || 0) }, 0)
+  document.getElementById('list-subtitle').textContent =
+    records.length + ' records - ' + uq + ' customer - Total ' + fmtIDR(gt)
+  tbody.innerHTML = records.map(function(r) {
+    var editBtn = isSuperAdmin
+      ? '<button class="btn btn--secondary btn--sm" onclick="openEdit(\'' + r.id + '\')">Edit</button>'
+      : '<span class="text-muted text-small">Read Only</span>'
+    var mths = MONTHS.map(function(m) {
+      return '<td style="text-align:right; white-space:nowrap; font-size:0.85rem;">' +
+        (r[m] ? fmtN(r[m]) : '-') + '</td>'
+    }).join('')
+    return '<tr>' +
+      '<td><strong>' + escHtml(r.customerCode) + '</strong></td>' +
+      '<td>' + escHtml(r.budgetSegment) + '</td>' +
+      mths +
+      '<td style="text-align:right; white-space:nowrap; font-weight:700; color:#1a56db;">' + fmtN(r.totalBudget) + '</td>' +
+      '<td style="white-space:nowrap;">' + editBtn + '</td>' +
+      '</tr>'
+  }).join('')
+}
+
+function resetCreate() {
+  document.getElementById('create-customer').value = ''
+  document.getElementById('create-segment').value  = ''
+  MONTHS.forEach(function(m) {
+    var el = document.getElementById('cm-' + m)
+    if (el) el.value = 0
+  })
+  hideErr('create-error')
+  hideErr('create-success')
+}
+
+function submitCreate() {
+  hideErr('create-error')
+  hideErr('create-success')
+  var year          = document.getElementById('create-year').value
+  var customerCode  = document.getElementById('create-customer').value.trim()
+  var budgetSegment = document.getElementById('create-segment').value
+  if (!customerCode)  { showErr('create-error', 'Customer Code wajib diisi.'); return }
+  if (!budgetSegment) { showErr('create-error', 'Budget Segment wajib dipilih.'); return }
+  var body = { year: Number(year), customerCode: customerCode, budgetSegment: budgetSegment }
+  MONTHS.forEach(function(m) { body[m] = Number(document.getElementById('cm-' + m).value) || 0 })
+  var btn = document.getElementById('btn-create')
+  FCOS.setLoading(btn, 'Menyimpan...')
+  FCOS.api('createSalesBudget', 'POST', body).then(function() {
+    resetCreate()
+    showSuccess('create-success', 'Budget record berhasil disimpan.')
+  }).catch(function(err) {
+    showErr('create-error', err.message)
+  }).finally(function() {
+    FCOS.clearLoading(btn)
+  })
+}
+
+function openEdit(docId) {
+  if (!isSuperAdmin) return
+  editingId = docId
+  var r = currentData.find(function(x) { return x.id === docId })
+  if (!r) return
+  document.getElementById('modal-edit-title').textContent = 'Edit Budget - ' + r.budgetSegment
+  document.getElementById('modal-edit-meta').textContent  =
+    'Tahun: ' + r.year + '  |  Customer: ' + r.customerCode + '  |  Segment: ' + r.budgetSegment
+  hideErr('modal-edit-error')
+  document.getElementById('edit-months').innerHTML = MONTHS.map(function(m, i) {
+    return '<div class="form-group" style="margin-bottom:0;">' +
+      '<label class="form-label">' + MLABELS[i] + '</label>' +
+      '<input type="number" class="form-input" id="em-' + m + '" value="' + (r[m] || 0) + '" min="0"' +
+      ' style="text-align:right;" oninput="updateEditTotal()">' +
+      '</div>'
+  }).join('')
+  updateEditTotal()
+  document.getElementById('modal-edit').classList.remove('hidden')
+}
+
+function updateEditTotal() {
+  var t = MONTHS.reduce(function(s, m) {
+    var el = document.getElementById('em-' + m)
+    return s + (el ? Number(el.value) || 0 : 0)
+  }, 0)
+  document.getElementById('edit-total').textContent = fmtIDR(t)
+}
+
+document.getElementById('modal-edit-close').addEventListener('click', function() {
+  document.getElementById('modal-edit').classList.add('hidden')
+})
+document.getElementById('modal-edit-cancel').addEventListener('click', function() {
+  document.getElementById('modal-edit').classList.add('hidden')
+})
+document.getElementById('modal-edit-save').addEventListener('click', function() {
+  hideErr('modal-edit-error')
+  var body = { id: editingId }
+  MONTHS.forEach(function(m) {
+    var el = document.getElementById('em-' + m)
+    body[m] = el ? Number(el.value) || 0 : 0
+  })
+  var btn = document.getElementById('modal-edit-save')
+  FCOS.setLoading(btn, 'Menyimpan...')
+  FCOS.api('updateSalesBudget', 'POST', body).then(function() {
+    document.getElementById('modal-edit').classList.add('hidden')
+    loadBudgets()
+  }).catch(function(err) {
+    showErr('modal-edit-error', err.message)
+  }).finally(function() {
+    FCOS.clearLoading(btn)
+  })
+})
+
+var dz = document.getElementById('import-zone')
+dz.addEventListener('dragover',  function(e) { e.preventDefault(); dz.style.borderColor='#1a56db'; dz.style.background='#eff6ff' })
+dz.addEventListener('dragleave', function()  { dz.style.borderColor='#cbd5e1'; dz.style.background='' })
+dz.addEventListener('drop', function(e) {
+  e.preventDefault(); dz.style.borderColor='#cbd5e1'; dz.style.background=''
+  var f = e.dataTransfer.files[0]; if (f) processFile(f)
+})
+
+function handleFile(e) { var f = e.target.files[0]; if (f) processFile(f) }
+
+function processFile(file) {
+  var reader = new FileReader()
+  reader.onload = function(e) {
+    try {
+      var wb  = XLSX.read(e.target.result, { type: 'binary' })
+      var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: 0 })
+      validateAndPreview(raw)
+    } catch(err) {
+      showErr('import-alert-err', 'Gagal membaca file: ' + escHtml(err.message))
+    }
+  }
+  reader.readAsBinaryString(file)
+}
+
+function validateAndPreview(raw) {
+  importRows = []
+  hideErr('import-alert-ok')
+  hideErr('import-alert-err')
+  document.getElementById('import-preview').classList.add('hidden')
+  if (!raw.length) { showErr('import-alert-err', 'File kosong.'); return }
+  var norm = raw.map(function(row) {
+    var o = {}
+    Object.keys(row).forEach(function(k) { o[k.trim().toLowerCase()] = row[k] })
+    return o
+  })
+  if (!('customercode' in norm[0]) || !('budgetsegment' in norm[0])) {
+    showErr('import-alert-err', 'Kolom wajib tidak ditemukan: CustomerCode, BudgetSegment')
+    return
+  }
+  var rows = norm.map(function(r) {
+    var obj = { customerCode: String(r['customercode'] || '').trim(), budgetSegment: String(r['budgetsegment'] || '').trim() }
+    MONTHS.forEach(function(m) { obj[m] = Math.max(0, Number(r[m]) || 0) })
+    return obj
+  }).filter(function(r) { return r.customerCode && r.budgetSegment })
+  var grouped = {}
+  rows.forEach(function(r) {
+    if (!grouped[r.customerCode]) grouped[r.customerCode] = []
+    grouped[r.customerCode].push(r)
+  })
+  var errors = [], accepted = []
+  Object.keys(grouped).forEach(function(code) {
+    var cr = grouped[code]
+    var segs = cr.map(function(r) { return r.budgetSegment })
+    var unk = segs.filter(function(s) { return SEGMENTS.indexOf(s) === -1 })
+    if (unk.length) { errors.push('Customer ' + code + ': Segment tidak dikenal - ' + Array.from(new Set(unk)).join(', ')); return }
+    var seen = {}, dup = false
+    segs.forEach(function(s) { if (seen[s]) dup = true; seen[s] = true })
+    if (dup) { errors.push('Customer ' + code + ': Segment duplikat'); return }
+    var miss = SEGMENTS.filter(function(s) { return segs.indexOf(s) === -1 })
+    if (miss.length) { errors.push('Customer ' + code + ': ' + miss.length + ' segment tidak ada - ' + miss.join(', ')); return }
+    accepted = accepted.concat(cr)
+  })
+  if (errors.length) {
+    showErr('import-alert-err', errors.length + ' customer ditolak:\n' + errors.map(function(e) { return '- ' + e }).join('\n'))
+  }
+  if (!accepted.length) return
+  showSuccess('import-alert-ok', accepted.length + ' baris diterima dari ' + new Set(accepted.map(function(r) { return r.customerCode })).size + ' customer.')
+  importRows = accepted
+  document.getElementById('preview-tbody').innerHTML = accepted.map(function(r) {
+    var t = MONTHS.reduce(function(s, m) { return s + (r[m] || 0) }, 0)
+    return '<tr>' +
+      '<td><strong>' + escHtml(r.customerCode) + '</strong></td>' +
+      '<td>' + escHtml(r.budgetSegment) + '</td>' +
+      MONTHS.map(function(m) {
+        return '<td style="text-align:right; font-size:0.85rem;">' + (r[m] ? fmtN(r[m]) : '-') + '</td>'
+      }).join('') +
+      '<td style="text-align:right; font-weight:700; color:#1a56db;">' + fmtN(t) + '</td>' +
+      '<td><span style="font-size:0.75rem; background:#dcfce7; color:#166534; padding:2px 8px; border-radius:4px; font-weight:600;">Siap</span></td>' +
+      '</tr>'
+  }).join('')
+  document.getElementById('import-preview').classList.remove('hidden')
+}
+
+function submitImport() {
+  if (!importRows.length) return
+  var year = document.getElementById('import-year').value
+  var btn  = document.getElementById('btn-submit-import')
+  FCOS.setLoading(btn, 'Mengirim...')
+  FCOS.api('importSalesBudget', 'POST', { year: Number(year), rows: importRows }).then(function(data) {
+    hideErr('import-alert-ok')
+    hideErr('import-alert-err')
+    if (data.written > 0) showSuccess('import-alert-ok', data.written + ' record berhasil disimpan.')
+    if (data.rejectedCount > 0) showErr('import-alert-err', data.rejectedCount + ' customer ditolak server:\n' + (data.rejected || []).map(function(r) { return '- ' + r.customerCode + ': ' + r.reason }).join('\n'))
+    if (data.written > 0) {
+      importRows = []
+      document.getElementById('import-preview').classList.add('hidden')
+      document.getElementById('file-input').value = ''
+    }
+  }).catch(function(err) {
+    showErr('import-alert-err', 'Gagal: ' + escHtml(err.message))
+  }).finally(function() {
+    FCOS.clearLoading(btn)
+  })
+}
+
+function resetImport() {
+  importRows = []
+  hideErr('import-alert-ok')
+  hideErr('import-alert-err')
+  document.getElementById('import-preview').classList.add('hidden')
+  document.getElementById('file-input').value = ''
+}
+
+function exportExcel() {
+  if (!currentData.length) { alert('Muat data terlebih dahulu.'); return }
+  var rows = currentData.map(function(r) {
+    var o = { Year: r.year, CustomerCode: r.customerCode, BudgetSegment: r.budgetSegment }
+    MONTHS.forEach(function(m, i) { o[MLABELS[i]] = r[m] || 0 })
+    o.Total = r.totalBudget || 0
+    return o
+  })
+  var ws = XLSX.utils.json_to_sheet(rows)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'SalesBudget')
+  XLSX.writeFile(wb, 'SalesBudget_' + document.getElementById('filter-year').value + '.xlsx')
+}
+
+function downloadTemplate() {
+  var year = document.getElementById('import-year').value
+  var rows = SEGMENTS.map(function(s) {
+    var o = { CustomerCode: 'CXXX', BudgetSegment: s }
+    MONTHS.forEach(function(m, i) { o[MLABELS[i]] = 0 })
+    return o
+  })
+  var ws = XLSX.utils.json_to_sheet(rows)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Template')
+  XLSX.writeFile(wb, 'SalesBudget_Template_' + year + '.xlsx')
+}
+
+document.getElementById('btn-logout').addEventListener('click', function() { FCOS.logout() })
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+function showErr(id, msg) {
+  var el = document.getElementById(id)
+  if (!el) return
+  el.style.whiteSpace = 'pre-line'
+  el.textContent = msg
+  el.classList.remove('hidden')
+}
+function showSuccess(id, msg) {
+  var el = document.getElementById(id)
+  if (!el) return
+  el.style.whiteSpace = 'pre-line'
+  el.textContent = msg
+  el.classList.remove('hidden')
+}
+function hideErr(id) {
+  var el = document.getElementById(id)
+  if (!el) return
+  el.textContent = ''
+  el.classList.add('hidden')
+}
+</script>
+
+</body>
+</html>

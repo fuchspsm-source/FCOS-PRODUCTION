@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Import History</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">Administrasi</div>
+      <a href="/users/list.html">User Registry</a>
+      <a href="/organization/list.html">Organization Hierarchy</a>
+      <div class="sidebar__section-label">Product</div>
+      <a href="/products/list.html">Product Registry</a>
+      <a href="/products/families.html">Product Families</a>
+      <a href="/products/mapping.html">Family Mapping</a>
+      <a href="/products/import.html">Import Products</a>
+      <a href="/products/import-history.html" class="active">Import History</a>
+    </nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Import History</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">Import History</div>
+            <div class="page-header__subtitle" id="list-subtitle"></div>
+          </div>
+          <a href="/products/import.html" class="btn btn--primary">+ Import Baru</a>
+        </div>
+
+        <!-- Filter -->
+        <div style="margin-bottom:16px;">
+          <div class="filter-tabs" id="filter-status">
+            <button class="filter-tab active" data-status="">Semua</button>
+            <button class="filter-tab" data-status="PENDING">Pending</button>
+            <button class="filter-tab" data-status="STAGED">Staged</button>
+            <button class="filter-tab" data-status="VALIDATED">Validated</button>
+            <button class="filter-tab" data-status="COMMITTED">Committed</button>
+            <button class="filter-tab" data-status="PARTIALLY_COMMITTED">Parsial</button>
+            <button class="filter-tab" data-status="CANCELLED">Cancelled</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Job ID</th>
+                <th>File Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Total</th>
+                <th>OK</th>
+                <th>Conflict</th>
+                <th>Error</th>
+                <th>Dibuat</th>
+                <th>Committed</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="10" class="table-empty">Memuat...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="pagination" style="display:flex; gap:8px; align-items:center; margin-top:16px; justify-content:flex-end;"></div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+
+<script>
+  var PAGE_SIZE     = 20
+  var allJobs       = []
+  var filteredJobs  = []
+  var currentPage   = 1
+  var currentStatus = ''
+
+  var STATUS_BADGE = {
+    PENDING             : '<span class="badge badge--pending">Pending</span>',
+    STAGED              : '<span class="badge" style="background:#e0f2fe;color:#0369a1;">Staged</span>',
+    VALIDATED           : '<span class="badge" style="background:#fef9c3;color:#854d0e;">Validated</span>',
+    COMMITTED           : '<span class="badge badge--active">Committed</span>',
+    PARTIALLY_COMMITTED : '<span class="badge" style="background:#fff7ed;color:#c2410c;">Parsial</span>',
+    CANCELLED           : '<span class="badge badge--inactive">Cancelled</span>'
+  }
+
+  FCOS.initPage().then(function (user) {
+    FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')
+    document.getElementById('topbar-name').textContent  = user.name
+    document.getElementById('sidebar-footer').innerHTML =
+      '<div>' + esc(user.name) + '</div>' +
+      '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('main-content').classList.remove('hidden')
+    loadJobs()
+  })
+
+  async function loadJobs() {
+    var tbody = document.getElementById('table-body')
+    tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Memuat...</td></tr>'
+    try {
+      var data = await FCOS.api('listImportJobs', 'GET', null, { limit: '100' })
+      allJobs = data.jobs || []
+      applyFilter()
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="10" class="table-empty text-danger">Gagal: ' + esc(err.message) + '</td></tr>'
+    }
+  }
+
+  function applyFilter() {
+    filteredJobs = allJobs.filter(function (j) {
+      if (currentStatus && j.status !== currentStatus) return false
+      return true
+    })
+    currentPage = 1
+    renderTable()
+  }
+
+  function renderTable() {
+    var total = filteredJobs.length
+    var pages = Math.ceil(total / PAGE_SIZE) || 1
+    if (currentPage > pages) currentPage = pages
+    var start = (currentPage - 1) * PAGE_SIZE
+    var slice = filteredJobs.slice(start, start + PAGE_SIZE)
+
+    document.getElementById('list-subtitle').textContent = total + ' import job'
+
+    var tbody = document.getElementById('table-body')
+    if (slice.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Tidak ada data.</td></tr>'
+    } else {
+      tbody.innerHTML = slice.map(function (j) {
+        var statusBadge = STATUS_BADGE[j.status] || ('<span class="badge">' + esc(j.status) + '</span>')
+        return '<tr>' +
+          '<td class="text-small">' + esc(j.job_id) + '</td>' +
+          '<td>' + esc(j.file_name || '—') + '</td>' +
+          '<td class="text-small">' + esc(j.file_type || '—') + '</td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td class="text-small">' + (j.total_rows || 0) + '</td>' +
+          '<td class="text-small" style="color:#16a34a;">' + (j.valid_rows || 0) + '</td>' +
+          '<td class="text-small" style="color:#d97706;">' + (j.conflict_rows || 0) + '</td>' +
+          '<td class="text-small" style="color:#dc2626;">' + (j.error_rows || 0) + '</td>' +
+          '<td class="text-small">' + FCOS.formatDateTime(j.created_at) + '</td>' +
+          '<td class="text-small">' + (j.committed_at ? FCOS.formatDateTime(j.committed_at) : '—') + '</td>' +
+          '</tr>'
+      }).join('')
+    }
+
+    var pgEl = document.getElementById('pagination')
+    if (pages <= 1) { pgEl.innerHTML = ''; return }
+    var html = ''
+    if (currentPage > 1)  html += '<button class="btn btn--secondary btn--sm" onclick="goPage(' + (currentPage-1) + ')">← Prev</button>'
+    html += '<span class="text-small text-muted" style="padding:0 8px;">Hal ' + currentPage + ' / ' + pages + '</span>'
+    if (currentPage < pages) html += '<button class="btn btn--secondary btn--sm" onclick="goPage(' + (currentPage+1) + ')">Next →</button>'
+    pgEl.innerHTML = html
+  }
+
+  function goPage(n) { currentPage = n; renderTable() }
+
+  document.getElementById('filter-status').addEventListener('click', function (e) {
+    var tab = e.target.closest('.filter-tab')
+    if (!tab) return
+    document.querySelectorAll('#filter-status .filter-tab').forEach(function (t) { t.classList.remove('active') })
+    tab.classList.add('active')
+    currentStatus = tab.dataset.status
+    applyFilter()
+  })
+
+  document.getElementById('btn-logout').addEventListener('click', function () { FCOS.logout() })
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+</script>
+
+</body>
+</html>

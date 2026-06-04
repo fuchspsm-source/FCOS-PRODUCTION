@@ -1,7 +1,8 @@
 'use strict'
 
-const users  = require('./users')
-const matrix = require('./matrix')
+const users       = require('./users')
+const matrix      = require('./matrix')
+const salesBudget = require('./salesBudget')
 
 exports.register = users.register
 exports.getMe    = users.getMe
@@ -17,3 +18,10 @@ exports.listMatrix   = matrix.listMatrix
 exports.getMatrix    = matrix.getMatrix
 exports.createMatrix = matrix.createMatrix
 exports.closeMatrix  = matrix.closeMatrix
+
+exports.getSegmentList    = salesBudget.getSegmentList
+exports.listSalesBudgets  = salesBudget.listSalesBudgets
+exports.getSalesBudget    = salesBudget.getSalesBudget
+exports.createSalesBudget = salesBudget.createSalesBudget
+exports.updateSalesBudget = salesBudget.updateSalesBudget
+exports.importSalesBudget = salesBudget.importSalesBudget
