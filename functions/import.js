@@ -79,9 +79,10 @@ function extractFields(file_type, row) {
     return { primary_key: customerCode, fields: { customerCode, customerName } }
   }
   if (file_type === IMPORT_FILE_TYPE.SHIP_TO) {
-    const shipToCode = (row.shipToCode || '').trim()
-    const soldToCode = (row.soldToCode  || '').trim()
-    return { primary_key: shipToCode, fields: { shipToCode, soldToCode } }
+    const shipToCode         = (row.shipToCode         || '').trim()
+    const shipToName         = (row.shipToName         || '').trim()
+    const parentCustomerCode = (row.parentCustomerCode || '').trim()
+    return { primary_key: shipToCode, fields: { shipToCode, shipToName, parentCustomerCode } }
   }
   throw new Error(`extractFields: unknown file_type ${file_type}`)
 }
@@ -140,14 +141,131 @@ async function validateProduct(stagingRows, db) {
   return { results, valid_rows, conflict_rows, error_rows }
 }
 
-// DISPATCH: validateCustomer -- STUB (Package 5B)
-async function validateCustomer(_stagingRows, _db) {
-  throw new Error('NOT_IMPLEMENTED: validateCustomer will be built in Package 5B')
+// DISPATCH: validateCustomer (Package 5B — SOLD_TO only)
+async function validateCustomer(stagingRows, db) {
+  const registrySnap = await db.collection('customers').get()
+  const registryByCode = {}
+  registrySnap.docs.forEach(d => {
+    const data = d.data()
+    if (data.customerCode)
+      registryByCode[data.customerCode.trim().toUpperCase()] = d.id
+  })
+  const seenCodesInBatch = {}
+  let valid_rows = 0, conflict_rows = 0, error_rows = 0
+  const results = []
+  for (const row of stagingRows) {
+    const errors = []
+    let conflictType = null, conflictWith = null
+    const f    = row.fields || {}
+    const code = (f.customerCode || '').trim().toUpperCase()
+    const name = (f.customerName || '').trim()
+    // Rule 3: reject SHIP_TO
+    const rawRow  = row.raw_row || {}
+    const typeKey = Object.keys(rawRow).find(k => k.trim().toLowerCase() === 'customertype')
+    const rawType = typeKey ? String(rawRow[typeKey]).trim().toUpperCase() : 'SOLD_TO'
+    if (rawType === 'SHIP_TO') errors.push('SHIP_TO import not supported in Package 5B')
+    // Rule 1: customerCode required
+    if (!code) errors.push('customerCode_required')
+    // Rule 2: customerName required
+    if (!name) errors.push('customerName_required')
+    // Rule 4: unique within batch
+    if (code && seenCodesInBatch[code] !== undefined) {
+      errors.push('duplicate_code_in_batch')
+    } else if (code) {
+      seenCodesInBatch[code] = row.row_number
+    }
+    // Rule 5: not already in registry
+    if (errors.length === 0 && code && registryByCode[code]) {
+      conflictType = 'DUPLICATE_CODE_IN_REGISTRY'
+      conflictWith = registryByCode[code]
+    }
+    let vstatus
+    if (errors.length > 0) { vstatus = VALIDATION_STATUS.ERROR;    error_rows++ }
+    else if (conflictType)  { vstatus = VALIDATION_STATUS.CONFLICT;  conflict_rows++ }
+    else                    { vstatus = VALIDATION_STATUS.OK;        valid_rows++ }
+    results.push({ _ref: row._ref, validation_status: vstatus, validation_errors: errors,
+                   conflict_type: conflictType, conflict_with: conflictWith,
+                   similar_name_warning: false })
+  }
+  return { results, valid_rows, conflict_rows, error_rows }
 }
 
-// DISPATCH: validateShipTo -- STUB (Package 5C)
-async function validateShipTo(_stagingRows, _db) {
-  throw new Error('NOT_IMPLEMENTED: validateShipTo will be built in Package 5C')
+// DISPATCH: validateShipTo (Package 5C)
+async function validateShipTo(stagingRows, db) {
+  // Load parent registry (customers collection, SOLD_TO only)
+  const parentSnap = await db.collection('customers').get()
+  const parentByCode = {}
+  parentSnap.docs.forEach(d => {
+    const data = d.data()
+    if (data.customerCode && data.customerType !== 'SHIP_TO')
+      parentByCode[data.customerCode.trim().toUpperCase()] = { id: d.id, active: data.active }
+  })
+  // Load existing Ship-To registry for duplicate check
+  const shipToSnap = await db.collection('customerShipTos').get()
+  const registryByCode = {}
+  shipToSnap.docs.forEach(d => {
+    const data = d.data()
+    if (data.shipToCode)
+      registryByCode[data.shipToCode.trim().toUpperCase()] = d.id
+  })
+  const seenCodesInBatch = {}
+  let valid_rows = 0, conflict_rows = 0, error_rows = 0
+  const results = []
+  for (const row of stagingRows) {
+    const errors = []
+    let conflictType = null, conflictWith = null
+    let resolvedParentId = null, resolvedParentCode = null
+    const f            = row.fields || {}
+    const code         = (f.shipToCode         || '').trim().toUpperCase()
+    const name         = (f.shipToName         || '').trim()
+    const parentCode   = (f.parentCustomerCode || '').trim().toUpperCase()
+    // Rule 1: shipToCode required
+    if (!code) errors.push('shipToCode_required')
+    // Rule 2: shipToName required
+    if (!name) errors.push('shipToName_required')
+    // Rule 3: parentCustomerCode required
+    if (!parentCode) {
+      errors.push('parentCustomerCode_required')
+    } else {
+      const parent = parentByCode[parentCode]
+      // Rule 4: parent must exist
+      if (!parent) {
+        errors.push('parentCustomerCode_not_found')
+      } else if (!parent.active) {
+        // Rule 5: parent must be active
+        errors.push('parent_customer_inactive')
+      } else {
+        resolvedParentId   = parent.id
+        resolvedParentCode = parentCode
+      }
+    }
+    // Rule 6: duplicate within batch
+    if (code && seenCodesInBatch[code] !== undefined) {
+      errors.push('duplicate_code_in_batch')
+    } else if (code) {
+      seenCodesInBatch[code] = row.row_number
+    }
+    // Rule 7: duplicate in registry -> CONFLICT
+    if (errors.length === 0 && code && registryByCode[code]) {
+      conflictType = 'DUPLICATE_CODE_IN_REGISTRY'
+      conflictWith = registryByCode[code]
+    }
+    let vstatus
+    if (errors.length > 0) { vstatus = VALIDATION_STATUS.ERROR;    error_rows++ }
+    else if (conflictType)  { vstatus = VALIDATION_STATUS.CONFLICT;  conflict_rows++ }
+    else                    { vstatus = VALIDATION_STATUS.OK;        valid_rows++ }
+    results.push({
+      _ref               : row._ref,
+      validation_status  : vstatus,
+      validation_errors  : errors,
+      conflict_type      : conflictType,
+      conflict_with      : conflictWith,
+      resolved_parent_id : resolvedParentId,
+      resolved_parent_code: resolvedParentCode,
+      similar_name_warning: false
+    })
+  }
+  return { results, valid_rows, conflict_rows, error_rows }
 }
 
 // DISPATCH: commitProduct
@@ -206,9 +324,61 @@ async function commitProduct(row, batch, reservedId, userId, jobId) {
   return 'error_skipped'
 }
 
-// DISPATCH: commitCustomer -- STUB (Package 5B)
-async function commitCustomer(_row, _batch, _reservedId, _userId, _jobId) {
-  throw new Error('NOT_IMPLEMENTED: commitCustomer will be built in Package 5B')
+// DISPATCH: commitCustomer (Package 5B — SOLD_TO only)
+async function commitCustomer(row, batch, _reservedId, userId, jobId) {
+  if (row.validation_status === VALIDATION_STATUS.ERROR) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'error_skipped'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT && row.user_decision === USER_DECISION.SKIP) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'skipped'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT && row.user_decision === USER_DECISION.MANUAL_REVIEW) {
+    return 'manual_review'
+  }
+  if (row.validation_status === VALIDATION_STATUS.OK) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
+    const f = row.fields || {}
+    const customerRef = db.collection('customers').doc()
+    batch.set(customerRef, {
+      customerCode       : f.customerCode,
+      customerName       : f.customerName,
+      customerType       : 'SOLD_TO',
+      parentCustomerId   : null,
+      parentCustomerCode : null,
+      address            : f.address  || '',
+      city               : f.city     || '',
+      province           : f.province || '',
+      island             : f.island   || '',
+      active             : true,
+      import_job_id      : jobId,
+      createdAt          : FieldValue.serverTimestamp(),
+      updatedAt          : FieldValue.serverTimestamp(),
+      created_by         : userId,
+      updated_by         : userId
+    })
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'inserted'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT &&
+      row.user_decision === USER_DECISION.UPDATE && row.conflict_with) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
+    const f = row.fields || {}
+    batch.update(db.collection('customers').doc(row.conflict_with), {
+      customerName : f.customerName,
+      address      : f.address  || '',
+      city         : f.city     || '',
+      province     : f.province || '',
+      island       : f.island   || '',
+      import_job_id : jobId,
+      updatedAt    : FieldValue.serverTimestamp(),
+      updated_by   : userId
+    })
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'updated'
+  }
+  return 'error_skipped'
 }
 
 // DISPATCH: commitShipTo -- STUB (Package 5C)
