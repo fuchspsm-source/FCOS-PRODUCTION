@@ -48,6 +48,15 @@
           </div>
         </div>
 
+        <!-- IP-1: TAB BAR -->
+        <div class="filter-tabs" id="tab-bar" style="margin-bottom:20px;">
+          <button class="filter-tab active" data-tab="registry">Registry</button>
+          <button class="filter-tab" data-tab="import">Import Excel</button>
+        </div>
+
+        <!-- IP-2: REGISTRY WRAPPER OPEN -->
+        <div id="tab-registry">
+
         <!-- Toolbar -->
         <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
           <input type="text" class="form-input" id="search-input"
@@ -85,6 +94,51 @@
             </tbody>
           </table>
         </div>
+
+        </div><!-- IP-3: end #tab-registry -->
+
+        <!-- IP-4: IMPORT EXCEL PANEL -->
+        <div id="tab-import" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card__title">Panduan Import Ship-To</div>
+            <div style="font-size:0.88rem; line-height:1.9; color:#475569;">
+              <strong style="color:#1a1a2e;">Kolom wajib:</strong> ShipToCode &nbsp;|&nbsp; ShipToName &nbsp;|&nbsp; ParentCustomerCode<br>
+              <strong style="color:#1a1a2e;">Kolom opsional:</strong> Address &nbsp;|&nbsp; City &nbsp;|&nbsp; Province &nbsp;|&nbsp; Island<br>
+              <strong style="color:#1a1a2e;">ParentCustomerCode:</strong> Harus berupa Customer Code dari Sold-To yang aktif.<br>
+              <strong style="color:#1a1a2e;">Duplikat:</strong> ShipToCode yang sudah ada akan ditandai CONFLICT.<br>
+              <strong style="color:#1a1a2e;">Format:</strong> File Excel (.xlsx / .xls), maksimum 300 baris.
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn btn--secondary btn--sm" onclick="downloadShipToTemplate()">Download Template</button>
+            </div>
+          </div>
+          <div id="ship-import-zone"
+               style="border:2px dashed #cbd5e1; border-radius:8px; padding:40px; text-align:center; cursor:pointer; margin-bottom:16px;"
+               onclick="document.getElementById('ship-file-input').click()">
+            <div style="font-size:2rem; margin-bottom:8px;">&#128194;</div>
+            <div style="color:#374151; font-weight:600;">Klik untuk memilih</div>
+            <div style="color:#64748b; font-size:0.88rem; margin-top:4px;">atau drag &amp; drop file Excel (.xlsx / .xls)</div>
+          </div>
+          <input type="file" id="ship-file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleShipImportFile(event)">
+          <div id="ship-alert-ok"  class="alert alert--success hidden"></div>
+          <div id="ship-alert-err" class="alert alert--error hidden"></div>
+          <div id="ship-import-preview" class="hidden">
+            <div class="table-wrapper" style="overflow-x:auto; margin-bottom:16px;">
+              <table class="table">
+                <thead>
+                  <tr><th>#</th><th>ShipToCode</th><th>ShipToName</th><th>ParentCustomerCode</th></tr>
+                </thead>
+                <tbody id="ship-preview-tbody"></tbody>
+              </table>
+            </div>
+            <div id="ship-validate-summary" class="hidden" style="margin-bottom:12px; padding:12px; background:#f8fafc; border-radius:6px; font-size:0.88rem;"></div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+              <button class="btn btn--secondary" onclick="resetShipImport()">Bersihkan</button>
+              <button class="btn btn--primary" id="btn-ship-validate" onclick="startShipImport()">Upload &amp; Validate</button>
+              <button class="btn btn--success hidden" id="btn-ship-commit" onclick="commitShipImport()">Commit Import</button>
+            </div>
+          </div>
+        </div><!-- end #tab-import -->
 
       </div>
     </div>
@@ -203,6 +257,8 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/utils.js"></script>
+<!-- IP-5: XLSX CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 var allShipTos    = []
@@ -211,6 +267,10 @@ var shipToMap     = {}
 var currentStatus = ''
 var currentSoldTo = ''
 var editingId     = null
+// IP-6: IMPORT STATE VARS
+var currentTab      = 'registry'
+var shipImportRows  = []
+var shipImportJobId = null
 
 // ============================================================
 // INIT
@@ -345,6 +405,19 @@ document.getElementById('filter-status').addEventListener('click', function (e) 
   renderTable()
 })
 
+// IP-7: TAB SWITCHER
+document.getElementById('tab-bar').addEventListener('click', function (e) {
+  var btn = e.target.closest('.filter-tab')
+  if (!btn) return
+  var tab = btn.dataset.tab
+  if (tab === currentTab) return
+  document.querySelectorAll('#tab-bar .filter-tab').forEach(function (t) { t.classList.remove('active') })
+  btn.classList.add('active')
+  document.getElementById('tab-' + currentTab).classList.add('hidden')
+  currentTab = tab
+  document.getElementById('tab-' + currentTab).classList.remove('hidden')
+})
+
 // ============================================================
 // MODAL: CREATE
 // ============================================================
@@ -388,7 +461,6 @@ document.getElementById('modal-create-save').addEventListener('click', async fun
       soldToId, shipToCode: code, shipToName: name,
       address, city, province, island,
     })
-    // Find soldTo for denormalized fields
     var soldTo = allSoldTos.find(function (c) { return c.id === soldToId })
     var newShipTo = {
       id: res.id, shipToCode: code, shipToName: name,
@@ -505,6 +577,184 @@ function hideErr(id) {
   var el = document.getElementById(id)
   el.textContent = ''
   el.classList.add('hidden')
+}
+
+// ============================================================
+// IP-8: SHIP-TO IMPORT FUNCTIONS
+// ============================================================
+var shipDZ = document.getElementById('ship-import-zone')
+shipDZ.addEventListener('dragover', function (e) { e.preventDefault(); shipDZ.style.borderColor='#1a56db'; shipDZ.style.background='#eff6ff' })
+shipDZ.addEventListener('dragleave', function () { shipDZ.style.borderColor='#cbd5e1'; shipDZ.style.background='' })
+shipDZ.addEventListener('drop', function (e) {
+  e.preventDefault(); shipDZ.style.borderColor='#cbd5e1'; shipDZ.style.background=''
+  var f = e.dataTransfer.files[0]; if (f) processShipImportFile(f)
+})
+
+function handleShipImportFile(e) { var f = e.target.files[0]; if (f) processShipImportFile(f) }
+
+function processShipImportFile(file) {
+  var reader = new FileReader()
+  reader.onload = function (e) {
+    try {
+      var wb  = XLSX.read(e.target.result, { type: 'binary' })
+      var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      parseShipAndPreview(raw)
+    } catch (err) {
+      showShipErr('Gagal membaca file: ' + err.message)
+    }
+  }
+  reader.readAsBinaryString(file)
+}
+
+function parseShipAndPreview(raw) {
+  shipImportRows = []; shipImportJobId = null
+  hideShipAlerts()
+  document.getElementById('ship-import-preview').classList.add('hidden')
+  document.getElementById('ship-validate-summary').classList.add('hidden')
+  if (!raw.length) { showShipErr('File kosong.'); return }
+  var norm = raw.map(function (row) {
+    var o = {}
+    Object.keys(row).forEach(function (k) { o[k.trim().toLowerCase()] = row[k] })
+    return o
+  })
+  var hasCode   = 'shiptocode'         in norm[0]
+  var hasName   = 'shiptoname'         in norm[0]
+  var hasParent = 'parentcustomercode' in norm[0]
+  if (!hasCode || !hasName || !hasParent) {
+    showShipErr('Kolom wajib tidak ditemukan. Diperlukan: ShipToCode, ShipToName, ParentCustomerCode')
+    return
+  }
+  var rows = [], errors = []
+  norm.forEach(function (r, i) {
+    var code   = String(r['shiptocode']         || '').trim().toUpperCase()
+    var name   = String(r['shiptoname']         || '').trim()
+    var parent = String(r['parentcustomercode'] || '').trim().toUpperCase()
+    if (!code)   { errors.push('Baris ' + (i+2) + ': ShipToCode kosong');         return }
+    if (!name)   { errors.push('Baris ' + (i+2) + ': ShipToName kosong');         return }
+    if (!parent) { errors.push('Baris ' + (i+2) + ': ParentCustomerCode kosong'); return }
+    rows.push({
+      shipToCode:          code,
+      shipToName:          name,
+      parentCustomerCode:  parent,
+      address:  String(r['address']  || '').trim(),
+      city:     String(r['city']     || '').trim(),
+      province: String(r['province'] || '').trim(),
+      island:   String(r['island']   || '').trim()
+    })
+  })
+  if (errors.length) showShipErr(errors.slice(0,10).join('\n') + (errors.length > 10 ? '\n... dan ' + (errors.length-10) + ' lainnya' : ''))
+  if (!rows.length) return
+  if (rows.length > 300) { showShipErr('Maksimum 300 baris. File ini mengandung ' + rows.length + ' baris.'); return }
+  shipImportRows = rows
+  showShipOk(rows.length + ' baris siap di-upload.')
+  document.getElementById('ship-preview-tbody').innerHTML = rows.map(function (r, i) {
+    return '<tr><td>' + (i+1) + '</td><td><strong>' + escHtml(r.shipToCode) + '</strong></td><td>' +
+      escHtml(r.shipToName) + '</td><td>' + escHtml(r.parentCustomerCode) + '</td></tr>'
+  }).join('')
+  document.getElementById('btn-ship-validate').classList.remove('hidden')
+  document.getElementById('btn-ship-commit').classList.add('hidden')
+  document.getElementById('ship-import-preview').classList.remove('hidden')
+}
+
+async function startShipImport() {
+  var btn = document.getElementById('btn-ship-validate')
+  hideShipAlerts()
+  document.getElementById('ship-validate-summary').classList.add('hidden')
+  FCOS.setLoading(btn, 'Processing...')
+  try {
+    var jobRes = await FCOS.api('createImportJob', 'POST', {
+      file_name: 'shipto-import.xlsx', file_type: 'SHIP_TO', total_rows: shipImportRows.length
+    })
+    shipImportJobId = jobRes.job_id
+    var apiRows = shipImportRows.map(function (r, i) {
+      return {
+        row_number:          i + 1,
+        raw_row:             {},
+        shipToCode:          r.shipToCode,
+        shipToName:          r.shipToName,
+        parentCustomerCode:  r.parentCustomerCode,
+        address:             r.address,
+        city:                r.city,
+        province:            r.province,
+        island:              r.island
+      }
+    })
+    await FCOS.api('submitImportRows', 'POST', { job_id: shipImportJobId, rows: apiRows })
+    var valRes = await FCOS.api('validateImportJob', 'POST', { job_id: shipImportJobId })
+    var s = valRes.summary || {}
+    var summaryEl = document.getElementById('ship-validate-summary')
+    summaryEl.innerHTML =
+      '<strong>Hasil Validasi:</strong> ' +
+      '<span style="color:#166534;">✓ ' + (s.valid_rows||0) + ' OK</span>' +
+      (s.conflict_rows ? ' &nbsp; <span style="color:#854d0e;">⚠ ' + s.conflict_rows + ' CONFLICT</span>' : '') +
+      (s.error_rows    ? ' &nbsp; <span style="color:#991b1b;">✗ ' + s.error_rows    + ' ERROR</span>'    : '') +
+      ' &nbsp; <span style="color:#475569;">Total: ' + (s.total || shipImportRows.length) + '</span>'
+    summaryEl.classList.remove('hidden')
+    if ((s.valid_rows||0) > 0 || (s.conflict_rows||0) > 0) {
+      document.getElementById('btn-ship-validate').classList.add('hidden')
+      document.getElementById('btn-ship-commit').classList.remove('hidden')
+      showShipOk('Validasi selesai. Klik Commit Import untuk menyimpan baris yang valid.')
+    } else {
+      showShipErr('Tidak ada baris yang dapat di-commit. Periksa kembali file Anda.')
+    }
+  } catch (err) {
+    showShipErr('Gagal: ' + err.message + (shipImportJobId ? ' (Job: ' + shipImportJobId + ')' : ''))
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+}
+
+async function commitShipImport() {
+  if (!shipImportJobId) return
+  var btn = document.getElementById('btn-ship-commit')
+  hideShipAlerts()
+  FCOS.setLoading(btn, 'Committing...')
+  try {
+    var res = await FCOS.api('commitImportJob', 'POST', { job_id: shipImportJobId })
+    var s = res.summary || {}
+    var msg = 'Import selesai!'
+    if (s.inserted) msg += ' ' + s.inserted + ' ship-to baru ditambahkan.'
+    if (s.updated)  msg += ' ' + s.updated  + ' ship-to diperbarui.'
+    if (s.skipped)  msg += ' ' + s.skipped  + ' baris di-skip.'
+    showShipOk(msg)
+    document.getElementById('btn-ship-commit').classList.add('hidden')
+    loadAll()
+  } catch (err) {
+    showShipErr('Gagal commit: ' + err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+}
+
+function resetShipImport() {
+  shipImportRows = []; shipImportJobId = null
+  hideShipAlerts()
+  document.getElementById('ship-import-preview').classList.add('hidden')
+  document.getElementById('ship-validate-summary').classList.add('hidden')
+  document.getElementById('ship-file-input').value = ''
+}
+
+function downloadShipToTemplate() {
+  var rows = [
+    { ShipToCode: 'S000001', ShipToName: 'Contoh Ship-To A', ParentCustomerCode: 'C000001', Address: 'Jl. Contoh No.1', City: 'Jakarta', Province: 'DKI Jakarta', Island: 'Jawa' },
+    { ShipToCode: 'S000002', ShipToName: 'Contoh Ship-To B', ParentCustomerCode: 'C000001', Address: 'Jl. Contoh No.2', City: 'Surabaya', Province: 'Jawa Timur', Island: 'Jawa' }
+  ]
+  var ws = XLSX.utils.json_to_sheet(rows)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'ShipTo')
+  XLSX.writeFile(wb, 'ShipTo_Import_Template.xlsx')
+}
+
+function showShipOk(msg) {
+  var el = document.getElementById('ship-alert-ok')
+  el.style.whiteSpace = 'pre-line'; el.textContent = msg; el.classList.remove('hidden')
+}
+function showShipErr(msg) {
+  var el = document.getElementById('ship-alert-err')
+  el.style.whiteSpace = 'pre-line'; el.textContent = msg; el.classList.remove('hidden')
+}
+function hideShipAlerts() {
+  hideErr('ship-alert-ok'); hideErr('ship-alert-err')
 }
 </script>
 
