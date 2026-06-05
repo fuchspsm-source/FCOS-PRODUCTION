@@ -47,6 +47,14 @@
           </div>
         </div>
 
+        <div class="filter-tabs" id="tab-bar" style="margin-bottom:20px;">
+          <button class="filter-tab active" data-tab="registry">Registry</button>
+          <button class="filter-tab" data-tab="import">Import Excel</button>
+        </div>
+
+        <!-- TAB: REGISTRY -->
+        <div id="tab-registry">
+
         <!-- Toolbar -->
         <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
           <input type="text" class="form-input" id="search-input"
@@ -88,14 +96,56 @@
           </table>
         </div>
 
+        </div><!-- end #tab-registry -->
+
+        <!-- TAB: IMPORT EXCEL -->
+        <div id="tab-import" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card__title">Panduan Import Customer</div>
+            <div style="font-size:0.88rem; line-height:1.9; color:#475569;">
+              <strong style="color:#1a1a2e;">Kolom wajib:</strong> CustomerCode &nbsp;|&nbsp; CustomerName<br>
+              <strong style="color:#1a1a2e;">Tipe:</strong> Hanya SOLD_TO yang didukung. SHIP_TO akan ditolak otomatis.<br>
+              <strong style="color:#1a1a2e;">Duplikat:</strong> CustomerCode yang sudah ada akan ditandai CONFLICT.<br>
+              <strong style="color:#1a1a2e;">Format:</strong> File Excel (.xlsx / .xls), maksimum 300 baris.
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn btn--secondary btn--sm" onclick="downloadCustomerTemplate()">Download Template</button>
+            </div>
+          </div>
+          <div id="cust-import-zone"
+               style="border:2px dashed #cbd5e1; border-radius:8px; padding:40px; text-align:center; cursor:pointer; margin-bottom:16px;"
+               onclick="document.getElementById('cust-file-input').click()">
+            <div style="font-size:2rem; margin-bottom:8px;">&#128194;</div>
+            <div style="color:#374151; font-weight:600;">Klik untuk memilih</div>
+            <div style="color:#64748b; font-size:0.88rem; margin-top:4px;">atau drag &amp; drop file Excel (.xlsx / .xls)</div>
+          </div>
+          <input type="file" id="cust-file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleCustImportFile(event)">
+          <div id="cust-alert-ok"  class="alert alert--success hidden"></div>
+          <div id="cust-alert-err" class="alert alert--error hidden"></div>
+          <div id="cust-import-preview" class="hidden">
+            <div class="table-wrapper" style="overflow-x:auto; margin-bottom:16px;">
+              <table class="table">
+                <thead>
+                  <tr><th>#</th><th>CustomerCode</th><th>CustomerName</th></tr>
+                </thead>
+                <tbody id="cust-preview-tbody"></tbody>
+              </table>
+            </div>
+            <div id="cust-validate-summary" class="hidden" style="margin-bottom:12px; padding:12px; background:#f8fafc; border-radius:6px; font-size:0.88rem;"></div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+              <button class="btn btn--secondary" onclick="resetCustImport()">Bersihkan</button>
+              <button class="btn btn--primary" id="btn-cust-validate" onclick="startCustImport()">Upload &amp; Validate</button>
+              <button class="btn btn--success hidden" id="btn-cust-commit" onclick="commitCustImport()">Commit Import</button>
+            </div>
+          </div>
+        </div><!-- end #tab-import -->
+
       </div>
     </div>
   </div>
 </div>
 
-<!-- ====================================================== -->
-<!-- MODAL: CREATE                                          -->
-<!-- ====================================================== -->
+<!-- MODAL: CREATE -->
 <div id="modal-create" class="modal-overlay hidden">
   <div class="modal">
     <div class="modal__header">
@@ -150,9 +200,7 @@
   </div>
 </div>
 
-<!-- ====================================================== -->
-<!-- MODAL: EDIT                                            -->
-<!-- ====================================================== -->
+<!-- MODAL: EDIT -->
 <div id="modal-edit" class="modal-overlay hidden">
   <div class="modal">
     <div class="modal__header">
@@ -169,8 +217,6 @@
           Customer Code tidak dapat diubah setelah dibuat.
         </div>
       </div>
-
-      <!-- CR#1: SUPER_ADMIN sees editable select, others see disabled text -->
       <div class="form-group" id="edit-type-group-admin">
         <label class="form-label">Customer Type</label>
         <select class="form-input" id="edit-type-select">
@@ -186,7 +232,6 @@
         <input type="text" class="form-input" id="edit-type-text" disabled
           style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
       </div>
-
       <div class="form-group">
         <label class="form-label">Customer Name <span style="color:red">*</span></label>
         <input type="text" class="form-input" id="edit-name" placeholder="Nama customer">
@@ -227,6 +272,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/utils.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 var allCustomers  = []
@@ -235,21 +281,17 @@ var currentStatus = ''
 var currentType   = ''
 var editingId     = null
 var isSuperAdmin  = false
+var currentTab    = 'registry'
+var custImportRows = []
+var custImportJobId = null
 
-// ============================================================
-// INIT
-// ============================================================
 FCOS.initPage().then(function (user) {
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
-
   isSuperAdmin = (user.roles || []).includes('SUPER_ADMIN')
-
   document.getElementById('topbar-name').textContent  = user.name
   document.getElementById('sidebar-footer').innerHTML =
     '<div>' + escHtml(user.name) + '</div>' +
     '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
-
-  // CR#1: show correct type field in edit modal based on role
   if (isSuperAdmin) {
     document.getElementById('edit-type-group-admin').style.display    = 'block'
     document.getElementById('edit-type-group-readonly').style.display = 'none'
@@ -257,16 +299,11 @@ FCOS.initPage().then(function (user) {
     document.getElementById('edit-type-group-admin').style.display    = 'none'
     document.getElementById('edit-type-group-readonly').style.display = 'block'
   }
-
   document.getElementById('loading').style.display = 'none'
   document.getElementById('main-content').classList.remove('hidden')
-
   loadCustomers()
 })
 
-// ============================================================
-// LOAD
-// ============================================================
 async function loadCustomers() {
   var tbody = document.getElementById('tbody-customers')
   tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Memuat...</td></tr>'
@@ -284,14 +321,10 @@ async function loadCustomers() {
   }
 }
 
-// ============================================================
-// POPULATE PARENT DROPDOWNS
-// ============================================================
 function populateParentDropdowns() {
   var soldTos = allCustomers.filter(function (c) {
     return c.customerType === 'SOLD_TO' && c.active
   })
-
   ;['create-parent', 'edit-parent'].forEach(function (selId) {
     var sel = document.getElementById(selId)
     sel.innerHTML = '<option value="">— Pilih Sold-To —</option>'
@@ -304,17 +337,12 @@ function populateParentDropdowns() {
   })
 }
 
-// ============================================================
-// RENDER TABLE
-// ============================================================
 function renderTable() {
   var search = document.getElementById('search-input').value.toLowerCase()
-
   var soldTos = allCustomers.filter(function (c) {
     return c.customerType === 'SOLD_TO' || !c.customerType
   })
   var ordered = []
-
   soldTos.forEach(function (parent) {
     var parentMatch = true
     if (currentStatus === 'active'   && !parent.active) parentMatch = false
@@ -324,7 +352,6 @@ function renderTable() {
       !parent.customerCode?.toLowerCase().includes(search) &&
       !parent.customerName?.toLowerCase().includes(search)) parentMatch = false
     if (parentMatch) ordered.push({ record: parent, indent: false })
-
     if (currentType !== 'SOLD_TO') {
       var children = allCustomers.filter(function (c) {
         return c.customerType === 'SHIP_TO' && c.parentCustomerId === parent.id
@@ -340,8 +367,6 @@ function renderTable() {
       })
     }
   })
-
-  // Orphan SHIP_TOs
   if (currentType !== 'SOLD_TO') {
     allCustomers.filter(function (c) {
       return c.customerType === 'SHIP_TO' && !c.parentCustomerId
@@ -355,42 +380,32 @@ function renderTable() {
       if (match) ordered.push({ record: c, indent: false })
     })
   }
-
   document.getElementById('list-subtitle').textContent = ordered.length + ' customer'
-
   var tbody = document.getElementById('tbody-customers')
   if (ordered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Tidak ada data.</td></tr>'
     return
   }
-
   tbody.innerHTML = ordered.map(function (item) {
-    var c  = item.record
+    var c = item.record
     var indent = item.indent
-
     var typeBadge = c.customerType === 'SHIP_TO'
       ? '<span style="font-size:0.75rem;background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:4px;">Ship-To</span>'
       : '<span style="font-size:0.75rem;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:4px;">Sold-To</span>'
-
-    // CR#2: use stored parentCustomerCode + parentCustomerId
     var parentLabel = '—'
     if (c.parentCustomerCode && c.parentCustomerId) {
       var parentName = customerMap[c.parentCustomerId]
         ? customerMap[c.parentCustomerId].customerName : ''
       parentLabel = escHtml(c.parentCustomerCode + (parentName ? ' — ' + parentName : ''))
     }
-
     var codeCell = indent
       ? '<span style="padding-left:20px;" class="text-small">' + escHtml(c.customerCode) + '</span>'
       : '<strong>' + escHtml(c.customerCode) + '</strong>'
-
     var nameCell = indent
       ? '<span style="padding-left:20px;color:#64748b;">↳ ' + escHtml(c.customerName) + '</span>'
       : '<strong>' + escHtml(c.customerName) + '</strong>'
-
     var toggleLabel = c.active ? 'Nonaktifkan' : 'Aktifkan'
     var toggleClass = c.active ? 'btn--secondary' : 'btn--primary'
-
     return '<tr>' +
       '<td>' + codeCell + '</td>' +
       '<td>' + nameCell + '</td>' +
@@ -408,9 +423,6 @@ function renderTable() {
   }).join('')
 }
 
-// ============================================================
-// SEARCH & FILTER
-// ============================================================
 document.getElementById('search-input').addEventListener('input', renderTable)
 
 document.getElementById('filter-status').addEventListener('click', function (e) {
@@ -431,9 +443,6 @@ document.getElementById('filter-type').addEventListener('click', function (e) {
   renderTable()
 })
 
-// ============================================================
-// MODAL: CREATE — type toggle
-// ============================================================
 document.getElementById('create-type').addEventListener('change', function () {
   var isShipTo = this.value === 'SHIP_TO'
   document.getElementById('create-parent-group').style.display = isShipTo ? 'block' : 'none'
@@ -471,14 +480,12 @@ document.getElementById('modal-create-save').addEventListener('click', async fun
   var province = document.getElementById('create-province').value.trim()
   var island   = document.getElementById('create-island').value.trim()
   hideErr('modal-create-error')
-
   if (!code) { showErr('modal-create-error', 'Customer Code wajib diisi.'); return }
   if (!name) { showErr('modal-create-error', 'Customer Name wajib diisi.'); return }
   if (type === 'SHIP_TO' && !parent) {
     showErr('modal-create-error', 'Parent Customer wajib dipilih untuk Ship-To.')
     return
   }
-
   FCOS.setLoading(btn, 'Menyimpan...')
   try {
     var res = await FCOS.api('createCustomer', 'POST', {
@@ -488,7 +495,6 @@ document.getElementById('modal-create-save').addEventListener('click', async fun
       parentCustomerId: type === 'SHIP_TO' ? parent : null,
       address, city, province, island,
     })
-    // Get parentCustomerCode from selected option
     var parentCustomerCode = null
     if (type === 'SHIP_TO' && parent) {
       var parentCustomer = customerMap[parent]
@@ -516,9 +522,6 @@ document.getElementById('modal-create-save').addEventListener('click', async fun
   }
 })
 
-// ============================================================
-// MODAL: EDIT — type toggle (SUPER_ADMIN only)
-// ============================================================
 document.getElementById('edit-type-select').addEventListener('change', function () {
   var isShipTo = this.value === 'SHIP_TO'
   document.getElementById('edit-parent-group').style.display = isShipTo ? 'block' : 'none'
@@ -527,29 +530,24 @@ document.getElementById('edit-type-select').addEventListener('change', function 
 function openEdit(id) {
   editingId = id
   var c = customerMap[id]
-
   document.getElementById('edit-code').value     = c.customerCode
   document.getElementById('edit-name').value     = c.customerName  || ''
   document.getElementById('edit-address').value  = c.address       || ''
   document.getElementById('edit-city').value     = c.city          || ''
   document.getElementById('edit-province').value = c.province      || ''
   document.getElementById('edit-island').value   = c.island        || ''
-
   var currentTypeVal = c.customerType || 'SOLD_TO'
-
   if (isSuperAdmin) {
     document.getElementById('edit-type-select').value = currentTypeVal
   } else {
     document.getElementById('edit-type-text').value =
       currentTypeVal === 'SHIP_TO' ? 'Ship-To (Delivery)' : 'Sold-To (Billing)'
   }
-
   var isShipTo = currentTypeVal === 'SHIP_TO'
   document.getElementById('edit-parent-group').style.display = isShipTo ? 'block' : 'none'
   if (isShipTo) {
     document.getElementById('edit-parent').value = c.parentCustomerId || ''
   }
-
   hideErr('modal-edit-error')
   document.getElementById('modal-edit').classList.remove('hidden')
 }
@@ -570,19 +568,13 @@ document.getElementById('modal-edit-save').addEventListener('click', async funct
   var island   = document.getElementById('edit-island').value.trim()
   var c        = customerMap[editingId]
   hideErr('modal-edit-error')
-
   if (!name) { showErr('modal-edit-error', 'Customer Name wajib diisi.'); return }
-
   var payload = { id: editingId, customerName: name, address, city, province, island }
-
-  // CR#1: include customerType if SUPER_ADMIN
   var newType = c.customerType
   if (isSuperAdmin) {
     newType = document.getElementById('edit-type-select').value
     payload.customerType = newType
   }
-
-  // Parent field
   var isShipTo = newType === 'SHIP_TO'
   if (isShipTo) {
     var parent = document.getElementById('edit-parent').value
@@ -591,11 +583,9 @@ document.getElementById('modal-edit-save').addEventListener('click', async funct
   } else {
     payload.parentCustomerId = null
   }
-
   FCOS.setLoading(btn, 'Menyimpan...')
   try {
     await FCOS.api('updateCustomer', 'POST', payload)
-    // Update local state
     c.customerName = name
     c.address = address; c.city = city; c.province = province; c.island = island
     if (isSuperAdmin) c.customerType = newType
@@ -617,9 +607,6 @@ document.getElementById('modal-edit-save').addEventListener('click', async funct
   }
 })
 
-// ============================================================
-// TOGGLE STATUS
-// ============================================================
 async function toggleStatus(id) {
   var c      = customerMap[id]
   var action = c.active ? 'deactivateCustomer' : 'activateCustomer'
@@ -634,16 +621,10 @@ async function toggleStatus(id) {
   }
 }
 
-// ============================================================
-// LOGOUT
-// ============================================================
 document.getElementById('btn-logout').addEventListener('click', function () {
   FCOS.logout()
 })
 
-// ============================================================
-// HELPERS
-// ============================================================
 function escHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -658,6 +639,172 @@ function hideErr(id) {
   var el = document.getElementById(id)
   el.textContent = ''
   el.classList.add('hidden')
+}
+
+// ── TAB SWITCHER ─────────────────────────────────────────
+document.getElementById('tab-bar').addEventListener('click', function (e) {
+  var btn = e.target.closest('.filter-tab')
+  if (!btn) return
+  var tab = btn.dataset.tab
+  if (tab === currentTab) return
+  document.querySelectorAll('#tab-bar .filter-tab').forEach(function (t) { t.classList.remove('active') })
+  btn.classList.add('active')
+  document.getElementById('tab-' + currentTab).classList.add('hidden')
+  currentTab = tab
+  document.getElementById('tab-' + currentTab).classList.remove('hidden')
+})
+
+// ── CUSTOMER IMPORT ──────────────────────────────────────
+var custDZ = document.getElementById('cust-import-zone')
+custDZ.addEventListener('dragover', function (e) { e.preventDefault(); custDZ.style.borderColor='#1a56db'; custDZ.style.background='#eff6ff' })
+custDZ.addEventListener('dragleave', function () { custDZ.style.borderColor='#cbd5e1'; custDZ.style.background='' })
+custDZ.addEventListener('drop', function (e) {
+  e.preventDefault(); custDZ.style.borderColor='#cbd5e1'; custDZ.style.background=''
+  var f = e.dataTransfer.files[0]; if (f) processCustImportFile(f)
+})
+
+function handleCustImportFile(e) { var f = e.target.files[0]; if (f) processCustImportFile(f) }
+
+function processCustImportFile(file) {
+  var reader = new FileReader()
+  reader.onload = function (e) {
+    try {
+      var wb  = XLSX.read(e.target.result, { type: 'binary' })
+      var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      parseCustAndPreview(raw)
+    } catch (err) {
+      showCustErr('Gagal membaca file: ' + err.message)
+    }
+  }
+  reader.readAsBinaryString(file)
+}
+
+function parseCustAndPreview(raw) {
+  custImportRows = []; custImportJobId = null
+  hideCustAlerts()
+  document.getElementById('cust-import-preview').classList.add('hidden')
+  document.getElementById('cust-validate-summary').classList.add('hidden')
+  if (!raw.length) { showCustErr('File kosong.'); return }
+  var norm = raw.map(function (row) {
+    var o = {}
+    Object.keys(row).forEach(function (k) { o[k.trim().toLowerCase()] = row[k] })
+    return o
+  })
+  if (!('customercode' in norm[0]) || !('customername' in norm[0])) {
+    showCustErr('Kolom wajib tidak ditemukan: CustomerCode, CustomerName')
+    return
+  }
+  var rows = [], errors = []
+  norm.forEach(function (r, i) {
+    var code = String(r['customercode'] || '').trim().toUpperCase()
+    var name = String(r['customername'] || '').trim()
+    if (!code) { errors.push('Baris ' + (i+2) + ': CustomerCode kosong'); return }
+    if (!name) { errors.push('Baris ' + (i+2) + ': CustomerName kosong'); return }
+    rows.push({ customerCode: code, customerName: name })
+  })
+  if (errors.length) showCustErr(errors.slice(0,10).join('\n') + (errors.length > 10 ? '\n... dan ' + (errors.length-10) + ' lainnya' : ''))
+  if (!rows.length) return
+  if (rows.length > 300) { showCustErr('Maksimum 300 baris. File ini mengandung ' + rows.length + ' baris.'); return }
+  custImportRows = rows
+  showCustOk(rows.length + ' baris siap di-upload.')
+  document.getElementById('cust-preview-tbody').innerHTML = rows.map(function (r, i) {
+    return '<tr><td>' + (i+1) + '</td><td><strong>' + escHtml(r.customerCode) + '</strong></td><td>' + escHtml(r.customerName) + '</td></tr>'
+  }).join('')
+  document.getElementById('btn-cust-validate').classList.remove('hidden')
+  document.getElementById('btn-cust-commit').classList.add('hidden')
+  document.getElementById('cust-import-preview').classList.remove('hidden')
+}
+
+async function startCustImport() {
+  var btn = document.getElementById('btn-cust-validate')
+  hideCustAlerts()
+  document.getElementById('cust-validate-summary').classList.add('hidden')
+  FCOS.setLoading(btn, 'Processing...')
+  try {
+    var jobRes = await FCOS.api('createImportJob', 'POST', {
+      file_name: 'customer-import.xlsx', file_type: 'CUSTOMER', total_rows: custImportRows.length
+    })
+    custImportJobId = jobRes.job_id
+    var apiRows = custImportRows.map(function (r, i) {
+      return { row_number: i+1, raw_row: { customerCode: r.customerCode, customerName: r.customerName },
+               customerCode: r.customerCode, customerName: r.customerName }
+    })
+    await FCOS.api('submitImportRows', 'POST', { job_id: custImportJobId, rows: apiRows })
+    var valRes = await FCOS.api('validateImportJob', 'POST', { job_id: custImportJobId })
+    var s = valRes.summary || {}
+    var summaryEl = document.getElementById('cust-validate-summary')
+    summaryEl.innerHTML =
+      '<strong>Hasil Validasi:</strong> ' +
+      '<span style="color:#166534;">✓ ' + (s.valid_rows||0) + ' OK</span>' +
+      (s.conflict_rows ? ' &nbsp; <span style="color:#854d0e;">⚠ ' + s.conflict_rows + ' CONFLICT</span>' : '') +
+      (s.error_rows    ? ' &nbsp; <span style="color:#991b1b;">✗ ' + s.error_rows    + ' ERROR</span>'    : '') +
+      ' &nbsp; <span style="color:#475569;">Total: ' + (s.total||custImportRows.length) + '</span>'
+    summaryEl.classList.remove('hidden')
+    if ((s.valid_rows||0) > 0 || (s.conflict_rows||0) > 0) {
+      document.getElementById('btn-cust-validate').classList.add('hidden')
+      document.getElementById('btn-cust-commit').classList.remove('hidden')
+      showCustOk('Validasi selesai. Klik Commit Import untuk menyimpan baris yang valid.')
+    } else {
+      showCustErr('Tidak ada baris yang dapat di-commit. Periksa kembali file Anda.')
+    }
+  } catch (err) {
+    showCustErr('Gagal: ' + err.message + (custImportJobId ? ' (Job: ' + custImportJobId + ')' : ''))
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+}
+
+async function commitCustImport() {
+  if (!custImportJobId) return
+  var btn = document.getElementById('btn-cust-commit')
+  hideCustAlerts()
+  FCOS.setLoading(btn, 'Committing...')
+  try {
+    var res = await FCOS.api('commitImportJob', 'POST', { job_id: custImportJobId })
+    var s = res.summary || {}
+    var msg = 'Import selesai!'
+    if (s.inserted) msg += ' ' + s.inserted + ' customer baru ditambahkan.'
+    if (s.updated)  msg += ' ' + s.updated  + ' customer diperbarui.'
+    if (s.skipped)  msg += ' ' + s.skipped  + ' baris di-skip.'
+    showCustOk(msg)
+    document.getElementById('btn-cust-commit').classList.add('hidden')
+    loadCustomers()
+  } catch (err) {
+    showCustErr('Gagal commit: ' + err.message)
+  } finally {
+    FCOS.clearLoading(btn)
+  }
+}
+
+function resetCustImport() {
+  custImportRows = []; custImportJobId = null
+  hideCustAlerts()
+  document.getElementById('cust-import-preview').classList.add('hidden')
+  document.getElementById('cust-validate-summary').classList.add('hidden')
+  document.getElementById('cust-file-input').value = ''
+}
+
+function downloadCustomerTemplate() {
+  var rows = [
+    { CustomerCode: 'C000001', CustomerName: 'Contoh Customer A' },
+    { CustomerCode: 'C000002', CustomerName: 'Contoh Customer B' }
+  ]
+  var ws = XLSX.utils.json_to_sheet(rows)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Customers')
+  XLSX.writeFile(wb, 'Customer_Import_Template.xlsx')
+}
+
+function showCustOk(msg) {
+  var el = document.getElementById('cust-alert-ok')
+  el.style.whiteSpace = 'pre-line'; el.textContent = msg; el.classList.remove('hidden')
+}
+function showCustErr(msg) {
+  var el = document.getElementById('cust-alert-err')
+  el.style.whiteSpace = 'pre-line'; el.textContent = msg; el.classList.remove('hidden')
+}
+function hideCustAlerts() {
+  hideErr('cust-alert-ok'); hideErr('cust-alert-err')
 }
 </script>
 
