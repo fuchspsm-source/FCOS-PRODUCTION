@@ -198,7 +198,7 @@ async function validateShipTo(stagingRows, db) {
   parentSnap.docs.forEach(d => {
     const data = d.data()
     if (data.customerCode && data.customerType !== 'SHIP_TO')
-      parentByCode[data.customerCode.trim().toUpperCase()] = { id: d.id, active: data.active }
+      parentByCode[data.customerCode.trim().toUpperCase()] = { id: d.id, active: data.active, name: data.customerName }
   })
   // Load existing Ship-To registry for duplicate check
   const shipToSnap = await db.collection('customerShipTos').get()
@@ -214,7 +214,7 @@ async function validateShipTo(stagingRows, db) {
   for (const row of stagingRows) {
     const errors = []
     let conflictType = null, conflictWith = null
-    let resolvedParentId = null, resolvedParentCode = null
+    let resolvedParentId = null, resolvedParentCode = null, resolvedParentName = null
     const f            = row.fields || {}
     const code         = (f.shipToCode         || '').trim().toUpperCase()
     const name         = (f.shipToName         || '').trim()
@@ -237,6 +237,7 @@ async function validateShipTo(stagingRows, db) {
       } else {
         resolvedParentId   = parent.id
         resolvedParentCode = parentCode
+        resolvedParentName = parent.name
       }
     }
     // Rule 6: duplicate within batch
@@ -260,8 +261,9 @@ async function validateShipTo(stagingRows, db) {
       validation_errors  : errors,
       conflict_type      : conflictType,
       conflict_with      : conflictWith,
-      resolved_parent_id : resolvedParentId,
-      resolved_parent_code: resolvedParentCode,
+      resolved_parent_id   : resolvedParentId,
+      resolved_parent_code : resolvedParentCode,
+      resolved_parent_name : resolvedParentName,
       similar_name_warning: false
     })
   }
@@ -381,9 +383,63 @@ async function commitCustomer(row, batch, _reservedId, userId, jobId) {
   return 'error_skipped'
 }
 
-// DISPATCH: commitShipTo -- STUB (Package 5C)
-async function commitShipTo(_row, _batch, _reservedId, _userId, _jobId) {
-  throw new Error('NOT_IMPLEMENTED: commitShipTo will be built in Package 5C')
+// DISPATCH: commitShipTo (Package 5C)
+async function commitShipTo(row, batch, _reservedId, userId, jobId) {
+  if (row.validation_status === VALIDATION_STATUS.ERROR) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'error_skipped'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT && row.user_decision === USER_DECISION.SKIP) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'skipped'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT && row.user_decision === USER_DECISION.MANUAL_REVIEW) {
+    return 'manual_review'
+  }
+  if (row.validation_status === VALIDATION_STATUS.OK) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
+    const f = row.fields || {}
+    const shipToRef = db.collection('customerShipTos').doc()
+    batch.set(shipToRef, {
+      shipToCode           : f.shipToCode,
+      shipToName           : f.shipToName,
+      soldToId             : row.resolved_parent_id   || null,
+      soldToCode           : row.resolved_parent_code || null,
+      soldToName           : row.resolved_parent_name || null,
+      parentCustomerId     : row.resolved_parent_id   || null,
+      parentCustomerCode   : row.resolved_parent_code || null,
+      address              : f.address  || '',
+      city                 : f.city     || '',
+      province             : f.province || '',
+      island               : f.island   || '',
+      active               : true,
+      import_job_id        : jobId,
+      createdAt            : FieldValue.serverTimestamp(),
+      updatedAt            : FieldValue.serverTimestamp(),
+      created_by           : userId,
+      updated_by           : userId
+    })
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'inserted'
+  }
+  if (row.validation_status === VALIDATION_STATUS.CONFLICT &&
+      row.user_decision === USER_DECISION.UPDATE && row.conflict_with) {
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
+    const f = row.fields || {}
+    batch.update(db.collection('customerShipTos').doc(row.conflict_with), {
+      shipToName           : f.shipToName,
+      address              : f.address  || '',
+      city                 : f.city     || '',
+      province             : f.province || '',
+      island               : f.island   || '',
+      import_job_id        : jobId,
+      updatedAt            : FieldValue.serverTimestamp(),
+      updated_by           : userId
+    })
+    batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+    return 'updated'
+  }
+  return 'error_skipped'
 }
 
 // createImportJob
