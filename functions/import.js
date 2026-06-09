@@ -84,6 +84,17 @@ function extractFields(file_type, row) {
     const parentCustomerCode = (row.parentCustomerCode || '').trim()
     return { primary_key: shipToCode, fields: { shipToCode, shipToName, parentCustomerCode } }
   }
+  if (file_type === IMPORT_FILE_TYPE.HISTORICAL_SALES) {
+    const customer_code  = (row.customer_code  || '').trim()
+    const customer_name  = (row.customer_name  || '').trim()
+    const product_code   = (row.product_code   || '').trim()
+    const product_name   = (row.product_name   || '').trim()
+    const total_qty      = (row.total_qty      || '').toString().trim()
+    const total_revenue  = (row.total_revenue  || '').toString().trim()
+    const total_cost     = (row.total_cost     || '').toString().trim()
+    const primary_key    = customer_code + '_' + product_code
+    return { primary_key, fields: { customer_code, customer_name, product_code, product_name, total_qty, total_revenue, total_cost } }
+  }
   throw new Error(`extractFields: unknown file_type ${file_type}`)
 }
 
