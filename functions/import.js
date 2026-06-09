@@ -281,6 +281,40 @@ async function validateShipTo(stagingRows, db) {
   return { results, valid_rows, conflict_rows, error_rows }
 }
 
+// DISPATCH: validateHistoricalSales
+async function validateHistoricalSales(stagingRows) {
+  let valid_rows = 0, error_rows = 0
+  const results = []
+  for (const row of stagingRows) {
+    const errors = []
+    const f = row.fields || {}
+    const customer_code = (f.customer_code || '').trim()
+    const product_code  = (f.product_code  || '').trim()
+    const total_qty     = parseFloat(f.total_qty)
+    const total_revenue = parseFloat(f.total_revenue)
+    const total_cost    = parseFloat(f.total_cost)
+    if (!customer_code)         errors.push('customer_code_required')
+    if (!product_code)          errors.push('product_code_required')
+    if (isNaN(total_qty))       errors.push('total_qty_not_numeric')
+    else if (total_qty <= 0)    errors.push('total_qty_must_be_positive')
+    if (isNaN(total_revenue))   errors.push('total_revenue_not_numeric')
+    else if (total_revenue < 0) errors.push('total_revenue_must_be_non_negative')
+    if (isNaN(total_cost))      errors.push('total_cost_not_numeric')
+    else if (total_cost < 0)    errors.push('total_cost_must_be_non_negative')
+    const vstatus = errors.length > 0 ? 'ERROR' : 'OK'
+    if (vstatus === 'OK') valid_rows++; else error_rows++
+    results.push({
+      _ref                : row._ref,
+      validation_status   : vstatus,
+      validation_errors   : errors,
+      conflict_type       : null,
+      conflict_with       : null,
+      similar_name_warning: false
+    })
+  }
+  return { results, valid_rows, conflict_rows: 0, error_rows }
+}
+
 // DISPATCH: commitProduct
 async function commitProduct(row, batch, reservedId, userId, jobId) {
   if (row.validation_status === VALIDATION_STATUS.ERROR) {
@@ -583,6 +617,8 @@ exports.validateImportJob = run(
         validationResult = await validateCustomer(stagingRows, db)
       } else if (job.file_type === IMPORT_FILE_TYPE.SHIP_TO) {
         validationResult = await validateShipTo(stagingRows, db)
+      } else if (job.file_type === IMPORT_FILE_TYPE.HISTORICAL_SALES) {
+        validationResult = await validateHistoricalSales(stagingRows)
       } else {
         return res.status(400).json({ error: `Unknown file_type: ${job.file_type}` })
       }
