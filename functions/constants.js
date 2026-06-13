@@ -75,7 +75,8 @@ const IMPORT_FILE_TYPE = {
 const IMPORT_MODULE_NAME = {
   PRODUCT  : 'Product Registry',
   CUSTOMER : 'Customer Registry',
-  SHIP_TO  : 'Ship-To Registry'
+  SHIP_TO          : 'Ship-To Registry',
+  HISTORICAL_SALES : 'Historical Sales'
 }
 
 const IMPORT_PRIMARY_KEY_FIELD = {

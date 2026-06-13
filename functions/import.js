@@ -4,6 +4,7 @@ const { onRequest }  = require('firebase-functions/v2/https')
 const { db, admin }  = require('./db')
 const { requireAuth, requireActive, requireRole } = require('./middleware')
 const { writeAudit } = require('./audit')
+const { resolveProductHierarchy } = require('./resolveProductHierarchy')
 const {
   AUDIT, PRODUCT_STATUS,
   IMPORT_JOB_STATUS, IMPORT_FILE_TYPE, IMPORT_MODULE_NAME, IMPORT_PRIMARY_KEY_FIELD,
@@ -71,7 +72,12 @@ function extractFields(file_type, row) {
     const product_code = (row.product_code || '').trim()
     const product_name = (row.product_name || '').trim()
     const sku          = (row.sku          || '').trim() || null
-    return { primary_key: product_code, fields: { product_code, product_name, sku } }
+    const dbp          = row.dbp  != null && row.dbp  !== '' ? row.dbp  : null
+    const cost         = row.cost != null && row.cost !== '' ? row.cost : null
+    const brand        = (row.brand        || '').trim() || null
+    const family       = (row.family       || '').trim() || null
+    const master_sku   = (row.master_sku   || '').trim() || null
+    return { primary_key: product_code, fields: { product_code, product_name, sku, dbp, cost, brand, family, master_sku } }
   }
   if (file_type === IMPORT_FILE_TYPE.CUSTOMER) {
     const customerCode = (row.customerCode || '').trim()
@@ -89,9 +95,9 @@ function extractFields(file_type, row) {
     const customer_name  = (row.customer_name  || '').trim()
     const product_code   = (row.product_code   || '').trim()
     const product_name   = (row.product_name   || '').trim()
-    const total_qty      = (row.total_qty      || '').toString().trim()
-    const total_revenue  = (row.total_revenue  || '').toString().trim()
-    const total_cost     = (row.total_cost     || '').toString().trim()
+    const total_qty      = row.total_qty     != null ? String(row.total_qty).trim()     : ''
+    const total_revenue  = row.total_revenue != null ? String(row.total_revenue).trim() : ''
+    const total_cost     = row.total_cost    != null ? String(row.total_cost).trim()    : ''
     const primary_key    = customer_code + '_' + product_code
     return { primary_key, fields: { customer_code, customer_name, product_code, product_name, total_qty, total_revenue, total_cost } }
   }
@@ -122,8 +128,24 @@ async function validateProduct(stagingRows, db) {
     const code      = (row.fields && row.fields.product_code || row.product_code || '').trim()
     const name      = (row.fields && row.fields.product_name || row.product_name || '').trim()
     const nameLower = name.toLowerCase()
+    const rawDbp    = row.fields && row.fields.dbp  != null ? row.fields.dbp  : null
+    const rawCost   = row.fields && row.fields.cost != null ? row.fields.cost : null
     if (!code) errors.push('product_code_required')
     if (!name) errors.push('product_name_required')
+    // dbp — optional, numeric >= 0
+    let dbpVal = null
+    if (rawDbp !== null && rawDbp !== '') {
+      dbpVal = parseFloat(rawDbp)
+      if (isNaN(dbpVal) || dbpVal < 0) errors.push('dbp_not_numeric')
+    }
+    // cost — optional, numeric >= 0
+    let costVal = null
+    if (rawCost !== null && rawCost !== '') {
+      costVal = parseFloat(rawCost)
+      if (isNaN(costVal) || costVal < 0) errors.push('cost_not_numeric')
+    }
+    // cost > dbp — warning only, never block
+    const costExceedsDbp = (costVal !== null && dbpVal !== null && costVal > dbpVal)
     if (code && seenCodesInFile[code] !== undefined) {
       errors.push('duplicate_code_in_file')
     } else if (code) {
@@ -147,7 +169,8 @@ async function validateProduct(stagingRows, db) {
     else                    { vstatus = VALIDATION_STATUS.OK;        valid_rows++ }
     results.push({ _ref: row._ref, validation_status: vstatus, validation_errors: errors,
                    conflict_type: conflictType, conflict_with: conflictWith,
-                   similar_name_warning: similarWarn })
+                   similar_name_warning: similarWarn,
+                   cost_exceeds_dbp_warning: costExceedsDbp })
   }
   return { results, valid_rows, conflict_rows, error_rows }
 }
@@ -316,7 +339,7 @@ async function validateHistoricalSales(stagingRows) {
 }
 
 // DISPATCH: commitProduct
-async function commitProduct(row, batch, reservedId, userId, jobId) {
+async function commitProduct(row, batch, reservedId, userId, jobId, hierarchyCache) {
   if (row.validation_status === VALIDATION_STATUS.ERROR) {
     batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
     return 'error_skipped'
@@ -332,23 +355,74 @@ async function commitProduct(row, batch, reservedId, userId, jobId) {
     batch.update(row._ref, { commit_status: COMMIT_STATUS.PROCESSING })
     const product_id = reservedId
     const f = row.fields || {}
+
+    // PROD-IMPORT-1C: resolve Brand -> Family -> Master SKU hierarchy
+    const { ordoId, familyId, genusId } = await resolveProductHierarchy(
+      f.brand, f.family, f.master_sku, hierarchyCache, batch, userId
+    )
+
+    const finalProductCode = f.product_code || row.product_code
+    const finalProductName = f.product_name || row.product_name
+
     batch.set(db.collection('product_registry').doc(product_id), {
       product_id,
-      product_code        : f.product_code        || row.product_code,
-      product_name        : f.product_name        || row.product_name,
-      product_name_lower  : (f.product_name || row.product_name || '').toLowerCase().trim(),
+      product_code        : finalProductCode,
+      product_name        : finalProductName,
+      product_name_lower  : (finalProductName || '').toLowerCase().trim(),
       sku                 : f.sku !== undefined ? f.sku : (row.sku || null),
+      dbp                 : f.dbp  != null ? parseFloat(f.dbp)  : null,
+      cost                : f.cost != null ? parseFloat(f.cost) : null,
       status              : PRODUCT_STATUS.ACTIVE,
       import_job_id       : jobId,
-      taxonomy_ordo_id    : null,
-      taxonomy_family_id  : null,
-      taxonomy_genus_id   : null,
+      taxonomy_ordo_id    : ordoId,
+      taxonomy_family_id  : familyId,
+      taxonomy_genus_id   : genusId,
       taxonomy_species_id : null,
       created_at          : FieldValue.serverTimestamp(),
       updated_at          : FieldValue.serverTimestamp(),
       created_by          : userId,
       updated_by          : userId
     })
+
+    // PROD-IMPORT-1C: mirror into productCodes (Product Hierarchy tab) if Master SKU resolved
+    if (genusId) {
+      const codeUpper = finalProductCode.trim().toUpperCase()
+      const existingCodeSnap = await db.collection('productCodes')
+        .where('productCode', '==', codeUpper).limit(1).get()
+      if (existingCodeSnap.empty) {
+        const codeRef = db.collection('productCodes').doc()
+        batch.set(codeRef, {
+          genusId,
+          productCode : codeUpper,
+          description : finalProductName || '',
+          active      : true,
+          createdAt   : FieldValue.serverTimestamp(),
+          updatedAt   : FieldValue.serverTimestamp()
+        })
+      } else {
+        batch.update(existingCodeSnap.docs[0].ref, {
+          genusId,
+          description : finalProductName || '',
+          updatedAt   : FieldValue.serverTimestamp()
+        })
+      }
+    }
+
+    // PROD-IMPORT-1C: create product_family_mapping if Family resolved
+    if (familyId) {
+      const mapRef = db.collection('product_family_mapping').doc()
+      batch.set(mapRef, {
+        product_id,
+        family_id      : familyId,
+        confidence     : 100,
+        mapping_source : 'IMPORT',
+        approved_by    : userId,
+        created_at     : FieldValue.serverTimestamp(),
+        updated_at     : FieldValue.serverTimestamp(),
+        approved_at    : FieldValue.serverTimestamp()
+      })
+    }
+
     batch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
     return 'inserted'
   }
@@ -361,6 +435,8 @@ async function commitProduct(row, batch, reservedId, userId, jobId) {
       product_name       : f.product_name        || row.product_name,
       product_name_lower : (f.product_name || row.product_name || '').toLowerCase().trim(),
       sku                : f.sku !== undefined ? f.sku : (row.sku || null),
+      dbp                : f.dbp  != null ? parseFloat(f.dbp)  : null,
+      cost               : f.cost != null ? parseFloat(f.cost) : null,
       import_job_id      : jobId,
       updated_at         : FieldValue.serverTimestamp(),
       updated_by         : userId
@@ -562,7 +638,9 @@ exports.submitImportRows = run(
           ...(job.file_type === IMPORT_FILE_TYPE.PRODUCT ? {
             product_code : fields.product_code,
             product_name : fields.product_name,
-            sku          : fields.sku
+            sku          : fields.sku,
+            dbp          : fields.dbp  != null ? fields.dbp  : null,
+            cost         : fields.cost != null ? fields.cost : null
           } : {}),
           validation_status    : VALIDATION_STATUS.OK,
           validation_errors    : [],
@@ -630,16 +708,17 @@ exports.validateImportJob = run(
       }
       for (const result of results) {
         currentBatch.update(result._ref, {
-          validation_status    : result.validation_status,
-          validation_errors    : result.validation_errors,
-          conflict_type        : result.conflict_type,
-          conflict_with        : result.conflict_with,
-          similar_name_warning : result.similar_name_warning || false,
-          user_decision        : null,
-          decided_at           : null,
-          decided_by           : null,
-          commit_status        : COMMIT_STATUS.PENDING,
-          committed_at         : null
+          validation_status        : result.validation_status,
+          validation_errors        : result.validation_errors,
+          conflict_type            : result.conflict_type,
+          conflict_with            : result.conflict_with,
+          similar_name_warning     : result.similar_name_warning || false,
+          cost_exceeds_dbp_warning : result.cost_exceeds_dbp_warning || false,
+          user_decision            : null,
+          decided_at               : null,
+          decided_by               : null,
+          commit_status            : COMMIT_STATUS.PENDING,
+          committed_at             : null
         })
         batchCount++
         if (batchCount >= BATCH_SIZE) await flushBatch()
@@ -743,6 +822,77 @@ exports.setRowDecision = run(
   }
 )
 
+// DISPATCH: commitHistoricalSales
+async function commitHistoricalSales(okRows, batch, userId, jobId) {
+  // Aggregate OK rows by customer_code + product_code
+  const groups = {}
+  for (const row of okRows) {
+    const f   = row.fields || {}
+    const key = f.customer_code + '_' + f.product_code
+    if (!groups[key]) {
+      groups[key] = {
+        customer_code : f.customer_code,
+        customer_name : f.customer_name || '',
+        product_code  : f.product_code,
+        product_name  : f.product_name  || '',
+        total_qty     : 0,
+        total_revenue : 0,
+        total_cost    : 0,
+        transaction_count: 0
+      }
+    }
+    const g = groups[key]
+    g.total_qty     += parseFloat(f.total_qty)     || 0
+    g.total_revenue += parseFloat(f.total_revenue) || 0
+    g.total_cost    += parseFloat(f.total_cost)    || 0
+    g.transaction_count++
+  }
+  // DELETE PRIOR DATASET before writing new one (full-set replacement strategy)
+  // Query all existing documents in historical_sales and delete in batches of 500
+  let deleteBatch = db.batch()
+  let deleteCount = 0
+  const existingSnap = await db.collection('historical_sales').get()
+  for (const doc of existingSnap.docs) {
+    deleteBatch.delete(doc.ref)
+    deleteCount++
+    if (deleteCount % 500 === 0) {
+      await deleteBatch.commit()
+      deleteBatch = db.batch()
+    }
+  }
+  if (deleteCount % 500 !== 0) await deleteBatch.commit()
+
+  // Write one document per group
+  for (const [docId, g] of Object.entries(groups)) {
+    const previous_price = g.total_qty     > 0 ? g.total_revenue / g.total_qty     : null
+    const previous_nc    = g.total_revenue > 0
+      ? ((g.total_revenue - g.total_cost) / g.total_revenue) * 100
+      : null
+    batch.set(db.collection('historical_sales').doc(docId), {
+      customer_code    : g.customer_code,
+      customer_name    : g.customer_name,
+      product_code     : g.product_code,
+      product_name     : g.product_name,
+      total_qty        : g.total_qty,
+      total_revenue    : g.total_revenue,
+      total_cost       : g.total_cost,
+      previous_price,
+      previous_nc,
+      transaction_count: g.transaction_count,
+      import_job_id    : jobId,
+      imported_at      : FieldValue.serverTimestamp()
+    })
+  }
+  // Mark all OK rows as COMMITTED
+  for (const row of okRows) {
+    batch.update(row._ref, {
+      commit_status : COMMIT_STATUS.COMMITTED,
+      committed_at  : FieldValue.serverTimestamp()
+    })
+  }
+  return Object.keys(groups).length
+}
+
 // commitImportJob
 exports.commitImportJob = run(
   [requireAuth, requireActive, requireRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')],
@@ -774,18 +924,37 @@ exports.commitImportJob = run(
       let inserted = 0, updated = 0, skipped = 0, manual_review = 0, errors_skipped = 0
       const BATCH_SIZE = 400
       let currentBatch = db.batch(), batchCount = 0
+      const hierarchyCache = { ordos: {}, families: {}, genus: {} }
       const flushBatch = async () => {
         if (batchCount > 0) { await currentBatch.commit(); currentBatch = db.batch(); batchCount = 0 }
+      }
+      // HISTORICAL_SALES: aggregate and write in one pass before the staging-row loop
+      if (job.file_type === IMPORT_FILE_TYPE.HISTORICAL_SALES) {
+        const hsOkRows = pendingRows.filter(r => r.validation_status === VALIDATION_STATUS.OK)
+        inserted = await commitHistoricalSales(hsOkRows, currentBatch, req.user.uid, job_id)
+        batchCount += hsOkRows.length * 2 + inserted
+        await flushBatch()
+        // Mark ERROR rows as COMMITTED (skipped)
+        const hsErrRows = pendingRows.filter(r => r.validation_status !== VALIDATION_STATUS.OK)
+        for (const row of hsErrRows) {
+          currentBatch.update(row._ref, { commit_status: COMMIT_STATUS.COMMITTED, committed_at: FieldValue.serverTimestamp() })
+          errors_skipped++
+          batchCount++
+          if (batchCount >= BATCH_SIZE) await flushBatch()
+        }
+        await flushBatch()
       }
       for (const row of pendingRows) {
         const reservedId = (row.validation_status === VALIDATION_STATUS.OK) ? reservedIds[idIndex++] : null
         let outcome
         if (job.file_type === IMPORT_FILE_TYPE.PRODUCT) {
-          outcome = await commitProduct(row, currentBatch, reservedId, req.user.uid, job_id)
+          outcome = await commitProduct(row, currentBatch, reservedId, req.user.uid, job_id, hierarchyCache)
         } else if (job.file_type === IMPORT_FILE_TYPE.CUSTOMER) {
           outcome = await commitCustomer(row, currentBatch, reservedId, req.user.uid, job_id)
         } else if (job.file_type === IMPORT_FILE_TYPE.SHIP_TO) {
           outcome = await commitShipTo(row, currentBatch, reservedId, req.user.uid, job_id)
+        } else if (job.file_type === IMPORT_FILE_TYPE.HISTORICAL_SALES) {
+          outcome = 'hs_handled'
         } else {
           return res.status(400).json({ error: `Unknown file_type: ${job.file_type}` })
         }
@@ -826,7 +995,8 @@ exports.commitImportJob = run(
       } catch (_) {}
       return res.status(500).json({ error: 'Internal error' })
     }
-  }
+  },
+  { timeoutSeconds: 540, memory: '512MiB' }
 )
 
 // cancelImportJob

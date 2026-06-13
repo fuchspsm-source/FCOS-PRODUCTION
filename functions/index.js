@@ -27,6 +27,7 @@ exports.updateSalesBudget = salesBudget.updateSalesBudget
 exports.importSalesBudget = salesBudget.importSalesBudget
 
 const products   = require('./products')
+exports.fcos_searchProducts = products.searchProducts
 const hierarchy  = require('./hierarchy')
 const importEng  = require('./import')
 const customers  = require('./customers')
@@ -86,3 +87,83 @@ exports.activateShipTo   = shipTo.activateShipTo
 exports.deactivateShipTo = shipTo.deactivateShipTo
 exports.updateUserManager   = users.updateUserManager
 exports.updateUserPosition  = users.updateUserPosition
+const positions = require('./positions')
+exports.getPositions = positions.getPositions
+exports.createPosition = positions.createPosition
+exports.updatePosition = positions.updatePosition
+exports.deactivatePosition = positions.deactivatePosition
+exports.reactivatePosition = positions.reactivatePosition
+exports.updateUserAuthorityRank = users.updateUserAuthorityRank
+exports.updateUserPosition = users.updateUserPosition
+exports.updateUserManager = users.updateUserManager
+exports.updateUserRoles = users.updateUserRoles
+
+const approvalMatrix = require('./approvalMatrix')
+exports.getApprovalMatrix = approvalMatrix.getApprovalMatrix
+exports.createMatrixDraft = approvalMatrix.createMatrixDraft
+exports.updateMatrixDraft = approvalMatrix.updateMatrixDraft
+exports.deleteMatrixDraft = approvalMatrix.deleteMatrixDraft
+exports.publishMatrix = approvalMatrix.publishMatrix
+
+const delegations = require('./delegations')
+exports.getDelegations = delegations.getDelegations
+exports.createDelegation = delegations.createDelegation
+exports.deactivateDelegation = delegations.deactivateDelegation
+exports.seedPositions = positions.seedPositions
+exports.seedApprovalMatrix      = approvalMatrix.seedApprovalMatrix
+exports.seedApprovalMatrixRules = approvalMatrix.seedApprovalMatrixRules
+
+const approvalRequests = require('./approvalRequests')
+exports.fcos_createApprovalRequest = approvalRequests.createApprovalRequest
+
+const approvalActions = require('./approvalActions')
+exports.fcos_recordApprovalAction = approvalActions.recordApprovalAction
+
+// Package 3C-3: Approver Inbox
+const approvalInbox = require('./approvalInbox')
+exports.fcos_getApproverInbox = approvalInbox.getApproverInbox
+
+// Package 3C-4: Approval Detail Screen
+const approvalDetail = require('./approvalDetail')
+exports.fcos_getApprovalDetail = approvalDetail.getApprovalDetail
+
+// Package PSM-2: Create PSM Draft
+const psmRequests = require('./psmRequests')
+exports.fcos_createPsmDraft = psmRequests.createPsmDraft
+
+// Package PSM-3: Save PSM Header
+exports.fcos_savePsmHeader = psmRequests.savePsmHeader
+
+// Package PSM-4A: Product Search
+exports.fcos_searchProducts = products.searchProducts
+
+// Package PSM-4B: Add PSM Item
+exports.fcos_addPsmItem = require('./psmRequests').addPsmItem
+
+// Package PSM-4C: Remove PSM Item
+exports.fcos_removePsmItem = require('./psmRequests').removePsmItem
+
+// Package PSM-5: Submit PSM
+exports.fcos_submitPsm = require('./psmRequests').submitPsm
+
+// Package PSM-6: Create PSM Approval Request
+exports.fcos_createPsmApprovalRequest = require('./psmRequests').createPsmApprovalRequest
+
+// Package PSM-7: Record PSM Approval Action
+exports.fcos_recordPsmApprovalAction = require('./psmRequests').recordPsmApprovalAction
+
+// Package PSM-8: Sync Approval Result
+exports.fcos_syncApprovalResult = require('./psmRequests').syncApprovalResult
+
+// Package PSM-9: Recall PSM
+exports.fcos_recallPsm = require('./psmRequests').recallPsm
+
+// Package PSM-RM-1: List PSMs
+exports.fcos_listPsms = require('./psmRead').listPsms
+
+// Package PSM-RM-2: Get PSM Detail
+exports.fcos_getPsmDetail = require('./psmRead').getPsmDetail
+
+// Package PSM-PDF-1C: Get PSM PDF
+exports.fcos_getPsmPdf = require('./psmRead').getPsmPdf
+

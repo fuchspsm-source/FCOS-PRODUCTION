@@ -1,0 +1,10 @@
+'use strict'
+
+const REQUEST_STATUS = {
+  PENDING:   'PENDING',
+  APPROVED:  'APPROVED',
+  REJECTED:  'REJECTED',
+  CANCELLED: 'CANCELLED'
+}
+
+module.exports = { REQUEST_STATUS }

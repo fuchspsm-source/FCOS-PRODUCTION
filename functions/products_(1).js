@@ -101,10 +101,14 @@ exports.createProduct = run(
         product_id,
         product_code,
         product_name,
-        product_name_lower : product_name.toLowerCase().trim(),
-        product_code_lower : product_code.toLowerCase().trim(),
-        sku         : sku || null,
-        status      : PRODUCT_STATUS.ACTIVE,
+        product_name_lower   : product_name.toLowerCase().trim(),
+        sku                  : sku || null,
+        status               : PRODUCT_STATUS.ACTIVE,
+        // Taxonomy — reserved for future package, do not populate here
+        taxonomy_ordo_id     : null,
+        taxonomy_family_id   : null,
+        taxonomy_genus_id    : null,
+        taxonomy_species_id  : null,
         created_at  : FieldValue.serverTimestamp(),
         updated_at  : FieldValue.serverTimestamp(),
         created_by  : req.user.uid,
@@ -142,7 +146,6 @@ exports.updateProduct = run(
         product_code,
         product_name,
         product_name_lower : product_name.toLowerCase().trim(),
-        product_code_lower : product_code.toLowerCase().trim(),
         sku        : sku || null,
         updated_at : FieldValue.serverTimestamp(),
         updated_by : req.user.uid
@@ -442,69 +445,6 @@ exports.removeMapping = run(
     } catch (err) {
       console.error('[products] removeMapping:', err)
       return res.status(500).json({ error: 'Internal error' })
-    }
-  }
-)
-
-// GET searchProducts  ?q=<term>&limit=<n>
-exports.searchProducts = run(
-  [requireAuth, requireActive],
-  async (req, res) => {
-    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-    const { q, limit } = req.query
-    const searchTerm = q ? String(q).trim() : ''
-    const pageSize = Math.min(Math.max(parseInt(limit) || 20, 1), 50)
-
-    if (searchTerm.length < 2) {
-      return res.status(400).json({ error: 'Search term must be >= 2 characters' })
-    }
-
-    const searchLower = searchTerm.toLowerCase()
-    const db = admin.firestore()
-
-    try {
-      const [nameResults, codeResults] = await Promise.all([
-        db.collection('product_registry')
-          .where('status', '==', 'ACTIVE')
-          .where('product_name_lower', '>=', searchLower)
-          .where('product_name_lower', '<', searchLower + '\uf8ff')
-          .limit(pageSize)
-          .get(),
-        db.collection('product_registry')
-          .where('status', '==', 'ACTIVE')
-          .where('product_code_lower', '>=', searchLower)
-          .where('product_code_lower', '<', searchLower + '\uf8ff')
-          .limit(pageSize)
-          .get()
-      ])
-
-      const seen = new Set()
-      const products = []
-
-      const processDoc = (doc) => {
-        if (!seen.has(doc.id)) {
-          seen.add(doc.id)
-          const data = doc.data()
-          products.push({
-            product_id: doc.id,
-            product_code: data.product_code || '',
-            product_name: data.product_name || '',
-            source: data.source || '',
-            dbp: data.dbp || 0,
-            cost: data.cost || 0,
-            display_name: `${data.product_code || ''} - ${data.product_name || ''}`
-          })
-        }
-      }
-
-      nameResults.docs.forEach(processDoc)
-      codeResults.docs.forEach(processDoc)
-      products.sort((a, b) => a.product_code.localeCompare(b.product_code))
-
-      return res.status(200).json({ products })
-    } catch (err) {
-      console.error('[products] searchProducts:', err)
-      return res.status(500).json({ error: 'Search failed' })
     }
   }
 )
