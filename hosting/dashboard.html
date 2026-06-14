@@ -55,17 +55,10 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
 
 <script>
-  var NAV = [
-    { type: 'section', label: 'ADMINISTRASI', roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { label: 'User Registry',   href: '/users/list.html', roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { label: 'Organization Hierarchy', href: '/organization/list.html', roles: ['SUPER_ADMIN'] },
-    { type: 'section', label: 'PRODUCT', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] },
-    { label: 'Product Registry',  href: '/products/list.html',     roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] },
-    { label: 'Product Families',  href: '/products/families.html', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] },
-    { label: 'Family Mapping',    href: '/products/mapping.html',  roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING'] }
-  ]
+
 
   FCOS.initPage().then(function (user) {
     if (!FCOS.hasRole('SUPER_ADMIN', 'ADMIN')) {
@@ -75,9 +68,7 @@
 
     document.getElementById('topbar-name').textContent  = user.name
     document.getElementById('welcome-name').textContent = user.name.split(' ')[0]
-    document.getElementById('sidebar-footer').innerHTML =
-      '<div>' + escHtml(user.name) + '</div>' +
-      '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+    FCOS_SIDEBAR.build(user)
 
     document.getElementById('account-summary').innerHTML =
       '<dt>Nama</dt>'   + '<dd>' + escHtml(user.name)  + '</dd>' +
@@ -85,50 +76,11 @@
       '<dt>Role</dt>'   + '<dd>' + FCOS.formatRoles(user.roles) + '</dd>' +
       '<dt>Status</dt>' + '<dd>' + FCOS.statusBadge(user.status) + '</dd>'
 
-    buildNav(user)
 
     document.getElementById('loading').style.display = 'none'
     document.getElementById('main-content').classList.remove('hidden')
   })
 
-  function buildNav(user) {
-    var nav = document.getElementById('sidebar-nav')
-    nav.innerHTML = ''
-
-    NAV.forEach(function (item) {
-      var allowed = !item.roles ||
-        item.roles.some(function (r) { return (user.roles || []).includes(r) })
-      if (!allowed) return
-
-      if (item.type === 'section') {
-        var label = document.createElement('div')
-        label.className   = 'sidebar__section-label'
-        label.textContent = item.label
-        nav.appendChild(label)
-        return
-      }
-
-      if (item.disabled) {
-        var span = document.createElement('span')
-        span.className   = 'sidebar__nav-disabled'
-        span.textContent = item.label + ' (coming soon)'
-        span.style.cssText =
-          'display:block; padding:10px 24px; color:#475569;' +
-          'font-size:0.9rem; cursor:not-allowed;'
-        nav.appendChild(span)
-        return
-      }
-
-      var a = document.createElement('a')
-      a.href        = item.href
-      a.textContent = item.label
-      if (window.location.pathname === item.href ||
-          window.location.pathname.startsWith(item.href.replace('.html', ''))) {
-        a.classList.add('active')
-      }
-      nav.appendChild(a)
-    })
-  }
 
   document.getElementById('btn-logout').addEventListener('click', function () {
     FCOS.logout()

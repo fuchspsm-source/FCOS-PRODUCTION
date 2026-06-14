@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "fcos-production"
-  }
+  },
+  "targets": {
+    "fcos-production": {
+      "hosting": {
+        "po-portal": [
+          "po-portal-fcos"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

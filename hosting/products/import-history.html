@@ -11,17 +11,7 @@
 <div class="layout">
   <aside class="sidebar">
     <div class="sidebar__logo">FCOS</div>
-    <nav class="sidebar__nav">
-      <div class="sidebar__section-label">Administrasi</div>
-      <a href="/users/list.html">User Registry</a>
-      <a href="/organization/list.html">Organization Hierarchy</a>
-      <div class="sidebar__section-label">Product</div>
-      <a href="/products/list.html">Product Registry</a>
-      <a href="/products/families.html">Product Families</a>
-      <a href="/products/mapping.html">Family Mapping</a>
-      <a href="/products/import.html">Import Products</a>
-      <a href="/products/import-history.html" class="active">Import History</a>
-    </nav>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
     <div class="sidebar__footer" id="sidebar-footer"></div>
   </aside>
 
@@ -94,6 +84,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
 
 <script>
   var PAGE_SIZE     = 20

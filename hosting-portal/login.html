@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FLI Customer Portal — Login</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/portal.css">
+</head>
+<body>
+
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-card__logo">FLI</div>
+    <div class="auth-card__subtitle">Customer Portal — PT. Fuchs Lubricants Indonesia</div>
+
+    <div id="alert-msg" class="alert"></div>
+
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" class="form-control"
+             placeholder="email@company.com" autocomplete="email">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" class="form-control"
+             placeholder="Password" autocomplete="current-password">
+    </div>
+
+    <button id="btn-login" class="btn btn--primary btn--full">Sign In</button>
+
+    <div class="auth-card__footer">
+      <a href="#" id="link-forgot">Lupa password?</a>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/portal-api.js"></script>
+
+<script>
+  var emailEl    = document.getElementById('email')
+  var passwordEl = document.getElementById('password')
+  var btnLogin   = document.getElementById('btn-login')
+  var linkForgot = document.getElementById('link-forgot')
+
+  // Already logged in as portal user → go to PO form
+  firebase.auth().onAuthStateChanged(function (firebaseUser) {
+    if (!firebaseUser) return
+    firebaseUser.getIdToken(true)
+      .then(function (token) {
+        window.PORTAL.authToken = token
+        return PORTAL.api('portalWhoAmI', 'GET')
+      })
+      .then(function (me) {
+        if (me) window.location.href = '/po/new.html'
+      })
+      .catch(function () {
+        // Not a portal user or error — stay on login
+        firebase.auth().signOut()
+      })
+  })
+
+  btnLogin.addEventListener('click', handleLogin)
+  passwordEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleLogin()
+  })
+
+  async function handleLogin() {
+    var email    = emailEl.value.trim()
+    var password = passwordEl.value
+    clearMsg()
+
+    if (!email || !password) {
+      showMsg('error', 'Email dan password wajib diisi.')
+      return
+    }
+
+    setLoading(btnLogin, 'Masuk...')
+
+    try {
+      var cred  = await firebase.auth().signInWithEmailAndPassword(email, password)
+      var token = await cred.user.getIdToken(true)
+      window.PORTAL.authToken = token
+
+      // Validate this is a portal user (customer_users collection)
+      var me = await PORTAL.api('portalWhoAmI', 'GET')
+      if (!me) {
+        // api() already redirected to /access-denied.html
+        return
+      }
+
+      window.location.href = '/po/new.html'
+
+    } catch (err) {
+      if (err.name === 'PortalApiError' && err.status === 403) {
+        // FCOS internal user — show access denied inline first
+        showMsg('error', 'Akun ini tidak terdaftar sebagai Customer Portal user. Hubungi admin FLI.')
+        await firebase.auth().signOut()
+      } else {
+        showMsg('error', friendlyError(err.code || err.message))
+      }
+      resetLoading(btnLogin, 'Sign In')
+    }
+  }
+
+  linkForgot.addEventListener('click', async function (e) {
+    e.preventDefault()
+    var email = emailEl.value.trim()
+    if (!email) {
+      showMsg('error', 'Masukkan email Anda terlebih dahulu.')
+      return
+    }
+    linkForgot.style.pointerEvents = 'none'
+    linkForgot.textContent         = 'Mengirim...'
+    try { await firebase.auth().sendPasswordResetEmail(email) } catch (err) {}
+    finally {
+      linkForgot.style.pointerEvents = ''
+      linkForgot.textContent         = 'Lupa password?'
+    }
+    showMsg('success', 'Jika email terdaftar, link reset password sudah dikirim.')
+  })
+
+  function showMsg(type, msg) {
+    var el = document.getElementById('alert-msg')
+    el.textContent = msg
+    el.className   = 'alert alert--' + type
+    el.style.display = 'block'
+  }
+  function clearMsg() {
+    var el = document.getElementById('alert-msg')
+    el.style.display = 'none'
+    el.textContent   = ''
+  }
+  function setLoading(btn, text)  { btn.disabled = true;  btn.textContent = text }
+  function resetLoading(btn, text) { btn.disabled = false; btn.textContent = text }
+  function friendlyError(code) {
+    var map = {
+      'auth/user-not-found'     : 'Email tidak terdaftar.',
+      'auth/wrong-password'     : 'Password salah.',
+      'auth/invalid-credential' : 'Email atau password salah.',
+      'auth/invalid-email'      : 'Format email tidak valid.',
+      'auth/too-many-requests'  : 'Terlalu banyak percobaan. Tunggu beberapa menit.',
+      'auth/user-disabled'      : 'Akun ini telah dinonaktifkan.'
+    }
+    return map[code] || 'Login gagal. Silakan coba lagi.'
+  }
+</script>
+
+</body>
+</html>

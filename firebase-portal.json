@@ -1,0 +1,33 @@
+{
+  "hosting": {
+    "target": "po-portal",
+    "public": "hosting-portal",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/login",
+        "destination": "/login.html"
+      },
+      {
+        "source": "/access-denied",
+        "destination": "/access-denied.html"
+      },
+      {
+        "source": "/po/new",
+        "destination": "/po/new.html"
+      },
+      {
+        "source": "/po/detail",
+        "destination": "/po/detail.html"
+      },
+      {
+        "source": "**",
+        "destination": "/login.html"
+      }
+    ]
+  }
+}

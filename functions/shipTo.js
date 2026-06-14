@@ -200,3 +200,34 @@ exports.deactivateShipTo = onRequest(run(
     }
   }
 ))
+// ============================================================
+// getShipTosByCustomer
+// GET ?customer_code=<code>
+// Returns active Ship-Tos belonging to the given customer_code
+// sorted by shipToName ASC
+// ============================================================
+exports.getShipTosByCustomer = onRequest(run(
+  [requireAuth, requireActive],
+  async (req, res) => {
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+    const { customer_code } = req.query
+    if (!customer_code?.trim())
+      return res.status(400).json({ error: 'customer_code is required' })
+    try {
+      const snap = await db.collection('customerShipTos')
+        .where('soldToCode', '==', customer_code.trim().toUpperCase())
+        .where('active', '==', true)
+        .orderBy('shipToName')
+        .get()
+      const shipTos = snap.docs.map(d => ({
+        shipto_code : d.data().shipToCode,
+        shipto_name : d.data().shipToName,
+        address     : d.data().address || ''
+      }))
+      return res.status(200).json({ shipTos })
+    } catch (err) {
+      console.error('[shipTo] getShipTosByCustomer:', err)
+      return res.status(500).json({ error: 'Internal error' })
+    }
+  }
+))

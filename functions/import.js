@@ -80,9 +80,10 @@ function extractFields(file_type, row) {
     return { primary_key: product_code, fields: { product_code, product_name, sku, dbp, cost, brand, family, master_sku } }
   }
   if (file_type === IMPORT_FILE_TYPE.CUSTOMER) {
-    const customerCode = (row.customerCode || '').trim()
-    const customerName = (row.customerName || '').trim()
-    return { primary_key: customerCode, fields: { customerCode, customerName } }
+    const customerCode    = (row.customerCode || '').trim()
+    const customerName    = (row.customerName || '').trim()
+    const customerAddress = (row.customerAddress || row.address || '').trim()
+    return { primary_key: customerCode, fields: { customerCode, customerName, address: customerAddress } }
   }
   if (file_type === IMPORT_FILE_TYPE.SHIP_TO) {
     const shipToCode         = (row.shipToCode         || '').trim()

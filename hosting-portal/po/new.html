@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Purchase Order — FLI Portal</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/portal.css">
+  <style>
+    .po-layout { max-width: 1100px; margin: 0 auto; }
+    .topbar { background:#fff; border-bottom:3px solid #C74437; padding:0 32px; height:56px; display:flex; align-items:center; justify-content:space-between; }
+    .topbar__logo { font-size:1rem; font-weight:700; color:#C74437; letter-spacing:.04em; }
+    .topbar__user { display:flex; align-items:center; gap:16px; font-size:.88rem; color:#475569; }
+    .po-header-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:24px; }
+    .section-title { font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
+    .search-wrap { position:relative; }
+    .search-input { width:100%; padding:9px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:.92rem; outline:none; }
+    .search-input:focus { border-color:#C74437; box-shadow:0 0 0 3px rgba(199,68,55,.12); }
+    .autocomplete-list { position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #d1d5db; border-top:none; border-radius:0 0 6px 6px; max-height:220px; overflow-y:auto; z-index:100; display:none; }
+    .autocomplete-item { padding:9px 12px; cursor:pointer; font-size:.88rem; border-bottom:1px solid #f1f5f9; }
+    .autocomplete-item:hover, .autocomplete-item.selected { background:#f0f4ff; }
+    .autocomplete-item:last-child { border-bottom:none; }
+    .po-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    .po-table th { background:#1a3c6b; color:#fff; padding:9px 10px; text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+    .po-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+    .po-table tbody tr:hover td { background:#f8fafc; }
+    .po-table input[type="number"] { width:70px; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:.85rem; text-align:center; }
+    .po-table input:focus { border-color:#C74437; outline:none; }
+    .btn-remove { background:none; border:none; color:#dc2626; cursor:pointer; font-size:1rem; padding:2px 6px; border-radius:4px; }
+    .btn-remove:hover { background:#fef2f2; }
+    .totals-box { margin-top:20px; display:flex; justify-content:flex-end; }
+    .totals-table { width:320px; font-size:.9rem; }
+    .totals-table td { padding:6px 10px; }
+    .totals-table .total-row td { font-weight:700; font-size:1rem; border-top:2px solid #1a3c6b; padding-top:10px; }
+    .legal-note { background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:14px 16px; font-size:.8rem; color:#92400e; margin:20px 0; line-height:1.6; }
+    .quota-alert { background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:12px 16px; color:#991b1b; font-size:.85rem; margin-top:8px; display:none; }
+    .price-source-badge { font-size:.7rem; font-weight:600; padding:2px 6px; border-radius:10px; }
+    .price-source-badge.cpr { background:#dcfce7; color:#166534; }
+    .price-source-badge.dbp { background:#f1f5f9; color:#475569; }
+    .empty-row td { text-align:center; color:#94a3b8; padding:32px; font-size:.88rem; }
+    .success-box { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:24px; text-align:center; display:none; }
+    .success-box__number { font-size:1.8rem; font-weight:800; color:#166534; margin:8px 0; }
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body style="background:#f4f6f9; min-height:100vh;">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar__logo">FLI Customer Portal</div>
+  <div class="topbar__user">
+    <span id="topbar-customer"></span>
+    <button class="btn btn--secondary btn--sm" onclick="PORTAL.logout()">Logout</button>
+  </div>
+</header>
+
+<div style="padding:28px 32px;">
+<div class="po-layout">
+
+  <!-- LOADING -->
+  <div id="loading" class="text-muted" style="padding:40px 0;">Memuat data...</div>
+
+  <!-- MAIN CONTENT -->
+  <div id="main-content" class="hidden">
+
+    <!-- SUCCESS BOX -->
+    <div class="success-box" id="success-box">
+      <div style="font-size:1.1rem;font-weight:700;color:#166534;">✅ Purchase Order Berhasil Dibuat</div>
+      <div class="success-box__number" id="success-po-number"></div>
+      <div style="color:#64748b;font-size:.85rem;margin-bottom:16px;">PO Anda telah dikonfirmasi dan sedang diproses.</div>
+      <a id="success-pdf-link" href="#" class="btn btn--primary" style="margin-right:8px;">Download PDF</a>
+      <button class="btn btn--secondary" onclick="resetForm()">Buat PO Baru</button>
+    </div>
+
+    <!-- PO FORM -->
+    <div id="po-form">
+
+      <div class="page-header" style="margin-bottom:20px;">
+        <div>
+          <div class="page-header__title">Buat Purchase Order</div>
+          <div class="page-header__subtitle" id="po-date-display"></div>
+        </div>
+      </div>
+
+      <!-- PO HEADER GRID -->
+      <div class="po-header-grid">
+
+        <!-- LEFT: Customer Info -->
+        <div class="card" style="margin-bottom:0;">
+          <div class="section-title">Informasi Customer</div>
+          <dl class="detail-grid" style="grid-template-columns:130px 1fr;">
+            <dt>Customer</dt><dd id="info-customer-name">—</dd>
+            <dt>Kode</dt><dd id="info-customer-code">—</dd>
+            <dt>Alamat</dt><dd id="info-customer-address">—</dd>
+          </dl>
+        </div>
+
+        <!-- RIGHT: Ship-To + Segment -->
+        <div class="card" style="margin-bottom:0;">
+          <div class="section-title">Pengiriman</div>
+          <div class="form-group">
+            <label>Ship-To</label>
+            <select id="shipto-select" class="form-control" onchange="onShipToChange()">
+              <option value="">— Pilih Ship-To —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Alamat Pengiriman</label>
+            <input type="text" id="shipto-address" class="form-control" readonly style="background:#f3f4f6;">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SEGMENT + REFERENCE -->
+      <div class="po-header-grid" style="margin-bottom:24px;">
+        <div class="card" style="margin-bottom:0;">
+          <div class="section-title">Segment</div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Segment</label>
+            <select id="segment-select" class="form-control">
+              <option value="">— Pilih Segment —</option>
+            </select>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;">
+          <div class="section-title">Referensi</div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>No. Referensi Customer (opsional)</label>
+            <input type="text" id="po-reference" class="form-control" placeholder="Nomor PO internal Anda">
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCT SEARCH -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="section-title">Tambah Produk</div>
+        <div class="search-wrap" style="max-width:480px;">
+          <input type="text" id="product-search" class="search-input"
+                 placeholder="Cari kode atau nama produk..."
+                 autocomplete="off"
+                 oninput="onProductSearch(this.value)"
+                 onkeydown="onSearchKeydown(event)">
+          <div class="autocomplete-list" id="autocomplete-list"></div>
+        </div>
+      </div>
+
+      <!-- LINE ITEMS TABLE -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="section-title">Daftar Produk</div>
+        <div class="table-wrapper" style="border:none;margin-bottom:0;">
+          <table class="po-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Material Code</th>
+                <th>Description</th>
+                <th style="width:90px;">Qty</th>
+                <th>Price List</th>
+                <th>Unit Price</th>
+                <th>Src</th>
+                <th>Disc %</th>
+                <th>Net Amount</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="line-items-body">
+              <tr class="empty-row" id="empty-row">
+                <td colspan="10">Belum ada produk. Gunakan pencarian di atas untuk menambah.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- QUOTA ALERT -->
+        <div class="quota-alert" id="quota-alert"></div>
+
+        <!-- TOTALS -->
+        <div class="totals-box">
+          <table class="totals-table">
+            <tr><td style="color:#64748b;">Subtotal</td><td style="text-align:right;font-weight:600;" id="total-subtotal">Rp 0</td></tr>
+            <tr><td style="color:#64748b;">PPN 11%</td><td style="text-align:right;" id="total-ppn">Rp 0</td></tr>
+            <tr class="total-row"><td>Grand Total</td><td style="text-align:right;color:#C74437;" id="total-grand">Rp 0</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- LEGAL NOTE -->
+      <div class="legal-note">
+        <strong>Catatan:</strong> Harga hanya sebagai indikasi awal. Apabila terjadi selisih maka akan mengikuti
+        nilai invoice yang diterbitkan oleh PT. Fuchs Lubricants Indonesia.
+      </div>
+
+      <!-- SIGNATURE + SAVE -->
+      <div class="card">
+        <div class="section-title">Tanda Tangan</div>
+        <div class="form-group" style="max-width:320px;">
+          <label>Nama Penandatangan</label>
+          <input type="text" id="signature-name" class="form-control" placeholder="Nama lengkap">
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+          <button id="btn-save" class="btn btn--primary" onclick="savePo()" disabled>
+            Save PO
+          </button>
+          <span id="save-hint" class="text-muted text-small">Lengkapi semua field sebelum menyimpan.</span>
+        </div>
+      </div>
+
+    </div><!-- /po-form -->
+  </div><!-- /main-content -->
+</div>
+</div>
+
+<!-- QUOTA MODAL -->
+<div class="modal-overlay hidden" id="quota-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal__header">
+      <span class="modal__title">⚠️ Kuota Tidak Mencukupi</span>
+      <button class="modal__close" onclick="closeQuotaModal()">×</button>
+    </div>
+    <div class="modal__body" id="quota-modal-msg" style="white-space:pre-line;font-size:.9rem;"></div>
+    <div class="modal__footer">
+      <button class="btn btn--primary" onclick="closeQuotaModal()">Mengerti</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/portal-api.js"></script>
+<script src="/js/portal-auth.js"></script>
+<script>
+
+// ── State ──────────────────────────────────────────────────
+var bootstrapData  = null   // { customer, ship_tos }
+var segments       = []     // from listSegments
+var lines          = []     // [{product_code, product_name, qty, price_source, resolved_price, final_price, line_total, matched_cpr_ids, allowed}]
+var searchTimeout  = null
+var hasQuotaError  = false
+
+// ── Init ───────────────────────────────────────────────────
+PORTAL.initPage().then(function(user) {
+  // Set topbar
+  document.getElementById('topbar-customer').textContent = user.customer_code
+
+  // Set today date
+  var today = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+  document.getElementById('po-date-display').textContent = 'Tanggal: ' + today
+
+  // Load bootstrap + segments in parallel
+  Promise.all([
+    PORTAL.api('portalBootstrap', 'GET'),
+    PORTAL.api('portalListSegments', 'GET')
+  ]).then(function(results) {
+    bootstrapData = results[0]
+    var segData   = results[1]
+
+    renderCustomerInfo(bootstrapData.customer)
+    renderShipToDropdown(bootstrapData.ship_tos)
+    renderSegmentDropdown(segData.segments || [])
+
+    document.getElementById('loading').classList.add('hidden')
+    document.getElementById('main-content').classList.remove('hidden')
+    checkSaveReady()
+  }).catch(function(err) {
+    document.getElementById('loading').textContent = 'Gagal memuat data: ' + err.message
+  })
+})
+
+// ── Render helpers ─────────────────────────────────────────
+function renderCustomerInfo(cust) {
+  document.getElementById('info-customer-name').textContent    = cust.customer_name || '—'
+  document.getElementById('info-customer-code').textContent    = cust.customer_code || '—'
+  document.getElementById('info-customer-address').textContent = cust.address || '—'
+}
+
+function renderShipToDropdown(shipTos) {
+  var sel = document.getElementById('shipto-select')
+  shipTos.forEach(function(s) {
+    var opt = document.createElement('option')
+    opt.value       = s.shipto_code
+    opt.textContent = s.shipto_code + ' — ' + s.shipto_name
+    opt.dataset.name    = s.shipto_name
+    opt.dataset.address = s.address || ''
+    sel.appendChild(opt)
+  })
+  if (shipTos.length === 1) {
+    sel.value = shipTos[0].shipto_code
+    onShipToChange()
+  }
+}
+
+function renderSegmentDropdown(segs) {
+  var sel = document.getElementById('segment-select')
+  segments = segs
+  segs.forEach(function(s) {
+    var opt = document.createElement('option')
+    opt.value       = s.segment_code
+    opt.textContent = s.segment_code + ' — ' + s.segment_name
+    sel.appendChild(opt)
+  })
+}
+
+function onShipToChange() {
+  var sel = document.getElementById('shipto-select')
+  var opt = sel.options[sel.selectedIndex]
+  document.getElementById('shipto-address').value = opt ? (opt.dataset.address || '') : ''
+  checkSaveReady()
+}
+
+// ── Product Search ─────────────────────────────────────────
+function onProductSearch(q) {
+  clearTimeout(searchTimeout)
+  if (q.length < 2) { hideAutocomplete(); return }
+  searchTimeout = setTimeout(function() { doSearch(q) }, 280)
+}
+
+async function doSearch(q) {
+  try {
+    var result = await PORTAL.api('portalSearchProducts', 'GET', null, { q: q, limit: 10 })
+    renderAutocomplete(result.products || [])
+  } catch(e) { hideAutocomplete() }
+}
+
+var _selectedAutoIdx = -1
+function renderAutocomplete(products) {
+  var list = document.getElementById('autocomplete-list')
+  list.innerHTML = ''
+  _selectedAutoIdx = -1
+  if (!products.length) { list.style.display = 'none'; return }
+  products.forEach(function(p, i) {
+    var div = document.createElement('div')
+    div.className = 'autocomplete-item'
+    div.innerHTML = '<strong>' + escHtml(p.product_code) + '</strong> — ' + escHtml(p.product_name) +
+                    ' <span style="color:#64748b;font-size:.78rem;">DBP: ' + fmtRp(p.dbp) + '</span>'
+    div.dataset.code = p.product_code
+    div.dataset.name = p.product_name
+    div.dataset.dbp  = p.dbp
+    div.onclick = function() { selectProduct(p) }
+    list.appendChild(div)
+  })
+  list.style.display = 'block'
+}
+
+function onSearchKeydown(e) {
+  var list  = document.getElementById('autocomplete-list')
+  var items = list.querySelectorAll('.autocomplete-item')
+  if (!items.length) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    _selectedAutoIdx = Math.min(_selectedAutoIdx + 1, items.length - 1)
+    items.forEach(function(el,i){ el.classList.toggle('selected', i === _selectedAutoIdx) })
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    _selectedAutoIdx = Math.max(_selectedAutoIdx - 1, 0)
+    items.forEach(function(el,i){ el.classList.toggle('selected', i === _selectedAutoIdx) })
+  } else if (e.key === 'Enter' && _selectedAutoIdx >= 0) {
+    e.preventDefault()
+    items[_selectedAutoIdx].click()
+  } else if (e.key === 'Escape') {
+    hideAutocomplete()
+  }
+}
+
+function hideAutocomplete() {
+  document.getElementById('autocomplete-list').style.display = 'none'
+}
+
+function selectProduct(p) {
+  // Check duplicate
+  if (lines.find(function(l){ return l.product_code === p.product_code })) {
+    showQuotaAlert('Produk ' + p.product_code + ' sudah ada di daftar.')
+    hideAutocomplete()
+    document.getElementById('product-search').value = ''
+    return
+  }
+  var line = {
+    product_code    : p.product_code,
+    product_name    : p.product_name,
+    qty             : 1,
+    price_source    : 'DBP',
+    resolved_price  : p.dbp || 0,
+    final_price     : p.dbp || 0,
+    line_total      : p.dbp || 0,
+    matched_cpr_ids : [],
+    allowed         : true,
+    resolving       : false
+  }
+  lines.push(line)
+  renderLines()
+  hideAutocomplete()
+  document.getElementById('product-search').value = ''
+  resolveLinePrice(lines.length - 1)
+}
+
+// ── Line rendering ─────────────────────────────────────────
+function renderLines() {
+  var tbody = document.getElementById('line-items-body')
+  if (!lines.length) {
+    tbody.innerHTML = '<tr class="empty-row" id="empty-row"><td colspan="10">Belum ada produk. Gunakan pencarian di atas untuk menambah.</td></tr>'
+    updateTotals()
+    checkSaveReady()
+    return
+  }
+  tbody.innerHTML = ''
+  lines.forEach(function(ln, i) {
+    var disc    = ln.resolved_price && ln.resolved_price > 0
+                  ? ((ln.resolved_price - ln.final_price) / ln.resolved_price * 100) : 0
+    var srcBadge = ln.price_source === 'CPR'
+                   ? '<span class="price-source-badge cpr">CPR</span>'
+                   : '<span class="price-source-badge dbp">DBP</span>'
+    var qtyCell = ln.resolving
+                  ? '<span class="spinner"></span>'
+                  : '<input type="number" min="1" value="' + ln.qty + '" onchange="onQtyChange(' + i + ', this.value)">'
+    var unitCell = ln.resolving ? '—' : fmtRp(ln.final_price)
+    var netCell  = ln.resolving ? '—' : fmtRp(ln.line_total)
+
+    var tr = document.createElement('tr')
+    tr.innerHTML =
+      '<td>' + (i+1) + '</td>' +
+      '<td><code style="font-size:.8rem;">' + escHtml(ln.product_code) + '</code></td>' +
+      '<td>' + escHtml(ln.product_name) + '</td>' +
+      '<td>' + qtyCell + '</td>' +
+      '<td style="text-align:right;color:#64748b;">' + (ln.resolving ? '—' : fmtRp(ln.resolved_price)) + '</td>' +
+      '<td style="text-align:right;font-weight:600;">' + unitCell + '</td>' +
+      '<td>' + srcBadge + '</td>' +
+      '<td style="text-align:right;">' + (ln.resolving ? '—' : fmtPct(disc)) + '</td>' +
+      '<td style="text-align:right;font-weight:600;color:#1a1a2e;">' + netCell + '</td>' +
+      '<td><button class="btn-remove" onclick="removeLine(' + i + ')" title="Hapus">×</button></td>'
+    tbody.appendChild(tr)
+  })
+  updateTotals()
+  checkSaveReady()
+}
+
+function removeLine(i) {
+  lines.splice(i, 1)
+  clearQuotaAlert()
+  renderLines()
+}
+
+// ── Price Resolution ───────────────────────────────────────
+function onQtyChange(i, val) {
+  var qty = parseInt(val, 10)
+  if (isNaN(qty) || qty < 1) qty = 1
+  lines[i].qty = qty
+  resolveLinePrice(i)
+}
+
+async function resolveLinePrice(i) {
+  var ln = lines[i]
+  ln.resolving = true
+  renderLines()
+  clearQuotaAlert()
+
+  try {
+    var today = new Date().toISOString().slice(0, 10)
+    var result = await PORTAL.api('portalResolvePrice', 'POST', {
+      product_code : ln.product_code,
+      qty          : ln.qty,
+      order_date   : today
+    })
+
+    ln.resolving       = false
+    ln.price_source    = result.price_source
+    ln.resolved_price  = result.unit_price
+    ln.final_price     = result.unit_price
+    ln.line_total      = ln.qty * result.unit_price
+    ln.matched_cpr_ids = result.matched_cpr_ids || []
+    ln.allowed         = result.allowed
+
+    if (!result.allowed) {
+      showQuotaModal(result.message || 'Kuota tidak mencukupi untuk produk ' + ln.product_code)
+    }
+
+  } catch(err) {
+    ln.resolving = false
+    ln.allowed   = false
+    showQuotaAlert('Gagal resolve harga untuk ' + ln.product_code + ': ' + err.message)
+  }
+
+  renderLines()
+  checkSaveReady()
+}
+
+// ── Totals ─────────────────────────────────────────────────
+function updateTotals() {
+  var subtotal  = lines.reduce(function(s, l) { return s + (l.line_total || 0) }, 0)
+  var ppn       = Math.round(subtotal * 0.11)
+  var grand     = subtotal + ppn
+  document.getElementById('total-subtotal').textContent = fmtRp(subtotal)
+  document.getElementById('total-ppn').textContent      = fmtRp(ppn)
+  document.getElementById('total-grand').textContent    = fmtRp(grand)
+}
+
+// ── Save PO ────────────────────────────────────────────────
+function checkSaveReady() {
+  var btn     = document.getElementById('btn-save')
+  var hint    = document.getElementById('save-hint')
+  var shipTo  = document.getElementById('shipto-select').value
+  var segment = document.getElementById('segment-select').value
+  var hasQuota = lines.some(function(l){ return !l.allowed })
+  var resolving = lines.some(function(l){ return l.resolving })
+
+  var ready = shipTo && segment && lines.length > 0 && !hasQuota && !resolving
+
+  btn.disabled = !ready
+  if (!shipTo)         hint.textContent = 'Pilih Ship-To.'
+  else if (!segment)   hint.textContent = 'Pilih Segment.'
+  else if (!lines.length) hint.textContent = 'Tambahkan minimal 1 produk.'
+  else if (resolving)  hint.textContent = 'Menunggu harga...'
+  else if (hasQuota)   hint.textContent = 'Ada produk dengan kuota tidak mencukupi.'
+  else                 hint.textContent = ''
+}
+
+async function savePo() {
+  var btn = document.getElementById('btn-save')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span> Menyimpan...'
+
+  var shipSel   = document.getElementById('shipto-select')
+  var segSel    = document.getElementById('segment-select')
+  var sigName   = document.getElementById('signature-name').value.trim()
+  var poRef     = document.getElementById('po-reference').value.trim()
+  var shipToCode = shipSel.value
+  var segCode    = segSel.value
+
+  var payload = {
+    po_reference_number : poRef || null,
+    shipto_code         : shipToCode,
+    segment_code        : segCode,
+    signature_name      : sigName,
+    lines               : lines.map(function(l) {
+      return { product_code: l.product_code, qty: l.qty }
+    })
+  }
+
+  try {
+    var result = await PORTAL.api('portalSavePo', 'POST', payload)
+    showSuccess(result.po_number)
+  } catch(err) {
+    btn.disabled    = false
+    btn.innerHTML   = 'Save PO'
+    showQuotaAlert('Gagal menyimpan PO: ' + err.message)
+  }
+}
+
+function showSuccess(poNumber) {
+  document.getElementById('po-form').classList.add('hidden')
+  var box = document.getElementById('success-box')
+  box.style.display = 'block'
+  document.getElementById('success-po-number').textContent = poNumber
+  var pdfLink = document.getElementById('success-pdf-link')
+  pdfLink.href = '/po/detail.html?po_number=' + encodeURIComponent(poNumber)
+  pdfLink.textContent = 'Lihat & Download PDF'
+}
+
+function resetForm() {
+  lines = []
+  document.getElementById('success-box').style.display = 'none'
+  document.getElementById('po-form').classList.remove('hidden')
+  document.getElementById('shipto-select').value = ''
+  document.getElementById('segment-select').value = ''
+  document.getElementById('signature-name').value = ''
+  document.getElementById('po-reference').value = ''
+  document.getElementById('shipto-address').value = ''
+  clearQuotaAlert()
+  renderLines()
+}
+
+// ── Alert / Modal ──────────────────────────────────────────
+function showQuotaAlert(msg) {
+  var el = document.getElementById('quota-alert')
+  el.textContent = msg
+  el.style.display = 'block'
+}
+function clearQuotaAlert() {
+  var el = document.getElementById('quota-alert')
+  el.style.display = 'none'
+  el.textContent = ''
+}
+function showQuotaModal(msg) {
+  document.getElementById('quota-modal-msg').textContent = msg
+  document.getElementById('quota-modal').classList.remove('hidden')
+}
+function closeQuotaModal() {
+  document.getElementById('quota-modal').classList.add('hidden')
+}
+
+// ── Formatters ─────────────────────────────────────────────
+function fmtRp(num) {
+  if (num === null || num === undefined || isNaN(num)) return '—'
+  return 'Rp ' + Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 })
+}
+function fmtPct(num) {
+  if (!num || isNaN(num)) return '0.00%'
+  return Number(num).toFixed(2) + '%'
+}
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+// Close autocomplete on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-wrap')) hideAutocomplete()
+})
+
+</script>
+</body>
+</html>

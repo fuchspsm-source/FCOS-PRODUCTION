@@ -1,0 +1,60 @@
+/* FLI Customer Portal — branding overrides */
+
+:root {
+  --fuchs-red    : #C74437;
+  --fuchs-dark   : #1a1a2e;
+}
+
+.auth-card__logo {
+  color       : var(--fuchs-red);
+  font-size   : 1.5rem;
+  font-weight : 800;
+  letter-spacing: 0.08em;
+}
+
+.auth-card__subtitle {
+  color : #64748b;
+}
+
+.btn--primary {
+  background-color : var(--fuchs-red);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background-color : #a8372c;
+}
+
+.topbar {
+  border-bottom : 3px solid var(--fuchs-red);
+}
+
+.topbar__logo {
+  font-size   : 1rem;
+  font-weight : 700;
+  color       : var(--fuchs-red);
+  letter-spacing: 0.04em;
+}
+
+/* Access denied page */
+.access-denied {
+  text-align  : center;
+  padding     : 64px 24px;
+}
+
+.access-denied__icon {
+  font-size     : 3rem;
+  margin-bottom : 16px;
+}
+
+.access-denied__title {
+  font-size     : 1.3rem;
+  font-weight   : 700;
+  color         : #1a1a2e;
+  margin-bottom : 8px;
+}
+
+.access-denied__msg {
+  color         : #64748b;
+  font-size     : 0.9rem;
+  margin-bottom : 24px;
+}

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — CPR Registry</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">CPR Registry</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">CPR Registry</div>
+            <div class="page-header__subtitle">Commercial Pricing Record — snapshot harga dari PSM yang disetujui</div>
+          </div>
+        </div>
+
+        <div class="filter-tabs" id="filter-tabs">
+          <button class="filter-tab active" data-status="">Semua</button>
+          <button class="filter-tab" data-status="ACTIVE">Active</button>
+          <button class="filter-tab" data-status="EXHAUSTED">Exhausted</button>
+          <button class="filter-tab" data-status="EXPIRED">Expired</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>PSM Number</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th>Harga (proposed)</th>
+                <th>Approved Qty</th>
+                <th>Remaining Qty</th>
+                <th>Berlaku</th>
+                <th>Status</th>
+                <th>PDF</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="9" class="table-empty">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+  var allRecords = []
+  var currentFilter = ''
+
+  FCOS.initPage().then(function (user) {
+    FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN')
+    document.getElementById('topbar-name').textContent = user.name
+    FCOS_SIDEBAR.build(user)
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('main-content').classList.remove('hidden')
+    loadCprRecords()
+  })
+
+  // Filter tabs
+  document.getElementById('filter-tabs').addEventListener('click', function (e) {
+    var btn = e.target.closest('.filter-tab')
+    if (!btn) return
+    document.querySelectorAll('.filter-tab').forEach(function (b) { b.classList.remove('active') })
+    btn.classList.add('active')
+    currentFilter = btn.dataset.status
+    renderTable()
+  })
+
+  async function loadCprRecords() {
+    var tbody = document.getElementById('table-body')
+    try {
+      var result = await FCOS.api('fcos_listCprRecords', 'GET')
+      allRecords = result.records || []
+      renderTable()
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="9" class="table-empty text-danger">Gagal memuat data: ' + escHtml(err.message) + '</td></tr>'
+    }
+  }
+
+  function renderTable() {
+    var tbody   = document.getElementById('table-body')
+    var records = currentFilter
+      ? allRecords.filter(function (r) { return r.status === currentFilter })
+      : allRecords
+
+    if (records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Tidak ada data</td></tr>'
+      return
+    }
+
+    tbody.innerHTML = records.map(function (r) {
+      var statusBadge = r.status === 'ACTIVE'
+        ? '<span class="badge badge--green">Active</span>'
+        : r.status === 'EXHAUSTED'
+          ? '<span class="badge badge--yellow">Exhausted</span>'
+          : '<span class="badge badge--gray">Expired</span>'
+
+      var validity = (r.validity_from || '-') + ' s/d ' + (r.validity_to || '-')
+      var price    = r.proposed_price != null
+        ? 'Rp ' + Number(r.proposed_price).toLocaleString('id-ID')
+        : '-'
+
+      return '<tr>' +
+        '<td>' + escHtml(r.psm_number || '-') + '</td>' +
+        '<td>' + escHtml(r.customer_name || r.customer_code || '-') + '</td>' +
+        '<td>' + escHtml(r.product_name || r.product_code || '-') + '</td>' +
+        '<td>' + price + '</td>' +
+        '<td style="text-align:right">' + (r.approved_qty != null ? r.approved_qty : '-') + '</td>' +
+        '<td style="text-align:right">' + (r.remaining_qty != null ? r.remaining_qty : '-') + '</td>' +
+        '<td>' + escHtml(validity) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td><button class="btn btn--secondary btn--sm" onclick="downloadPdf(' + JSON.stringify(r.id) + ')">PDF</button></td>' +
+        '</tr>'
+    }).join('')
+  }
+
+  function downloadPdf(cprId) {
+    var r = allRecords.find(function (x) { return x.id === cprId })
+    if (!r) return
+
+    var html = '<div style="font-family:Arial,sans-serif;padding:32px;max-width:700px">' +
+      '<h2 style="color:#1a1a2e;border-bottom:2px solid #1a1a2e;padding-bottom:8px">Commercial Pricing Record</h2>' +
+      '<table style="width:100%;border-collapse:collapse;margin-top:16px">' +
+      row('CPR ID',          r.cpr_id || r.id) +
+      row('PSM Number',      r.psm_number) +
+      row('Source PSM ID',   r.source_psm_id) +
+      row('Approval Req ID', r.source_approval_request_id) +
+      '<tr><td colspan="2" style="padding:8px 0;font-weight:bold;color:#475569;border-top:1px solid #e2e8f0">CUSTOMER</td></tr>' +
+      row('Customer Code',   r.customer_code) +
+      row('Customer Name',   r.customer_name) +
+      '<tr><td colspan="2" style="padding:8px 0;font-weight:bold;color:#475569;border-top:1px solid #e2e8f0">PRODUCT</td></tr>' +
+      row('Product Code',    r.product_code) +
+      row('Product Name',    r.product_name) +
+      '<tr><td colspan="2" style="padding:8px 0;font-weight:bold;color:#475569;border-top:1px solid #e2e8f0">COMMERCIAL</td></tr>' +
+      row('Proposed Price',  'Rp ' + Number(r.proposed_price || 0).toLocaleString('id-ID')) +
+      row('DBP',             'Rp ' + Number(r.dbp || 0).toLocaleString('id-ID')) +
+      row('Discount (NC)',   (r.discount != null ? r.discount + '%' : '-')) +
+      '<tr><td colspan="2" style="padding:8px 0;font-weight:bold;color:#475569;border-top:1px solid #e2e8f0">ALOKASI</td></tr>' +
+      row('Approved Qty',    r.approved_qty) +
+      row('Consumed Qty',    r.consumed_qty) +
+      row('Remaining Qty',   r.remaining_qty) +
+      '<tr><td colspan="2" style="padding:8px 0;font-weight:bold;color:#475569;border-top:1px solid #e2e8f0">VALIDITY</td></tr>' +
+      row('Berlaku Dari',    r.validity_from) +
+      row('Berlaku Sampai',  r.validity_to) +
+      row('Status',          r.status) +
+      '</table>' +
+      '<div style="margin-top:32px;font-size:11px;color:#94a3b8">Generated by FCOS — Fuchs Commercial Operating System</div>' +
+      '</div>'
+
+    var el = document.createElement('div')
+    el.innerHTML = html
+    document.body.appendChild(el)
+
+    html2pdf().set({
+      margin:   10,
+      filename: 'CPR-' + (r.psm_number || r.id) + '-' + (r.product_code || '') + '.pdf',
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(el).save().then(function () {
+      document.body.removeChild(el)
+    })
+  }
+
+  function row(label, value) {
+    return '<tr>' +
+      '<td style="padding:6px 12px 6px 0;color:#64748b;width:40%;border-bottom:1px solid #f1f5f9">' + escHtml(label) + '</td>' +
+      '<td style="padding:6px 0;border-bottom:1px solid #f1f5f9">' + escHtml(String(value != null ? value : '-')) + '</td>' +
+      '</tr>'
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', function () {
+    FCOS.logout()
+  })
+</script>
+</body>
+</html>

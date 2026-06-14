@@ -8,6 +8,7 @@ const { buildPsmApprovalEmail }      = require('../email/buildPsmApprovalEmail')
 const { buildPsmApprovedEmail }      = require('../email/buildPsmApprovedEmail')
 const { buildPsmRejectedEmail }      = require('../email/buildPsmRejectedEmail')
 const FieldValue                     = admin.firestore.FieldValue
+const { createCprFromPsm }           = require('./createCprFromPsm')
 const REGION = 'us-central1'
 
 function run(middlewares, handler) {
@@ -130,8 +131,33 @@ exports.recordPsmApprovalAction = onRequest({ region: REGION, secrets: [RESEND_A
         tx.update(arRef, requestUpdate)
         tx.set(auditRef, auditDoc)
 
+        const psm_id = freshData.payload_snapshot.psm_id
+
+        if (finalStatus === REQUEST_STATUS.APPROVED) {
+          tx.update(db.collection('psm_requests').doc(psm_id), {
+            status:      'APPROVED',
+            approved_at: FieldValue.serverTimestamp(),
+            updated_at:  FieldValue.serverTimestamp(),
+            updated_by:  req.user.uid
+          })
+        } else if (finalStatus === REQUEST_STATUS.REJECTED) {
+          tx.update(db.collection('psm_requests').doc(psm_id), {
+            status:      'REJECTED',
+            rejected_at: FieldValue.serverTimestamp(),
+            updated_at:  FieldValue.serverTimestamp(),
+            updated_by:  req.user.uid
+          })
+        }
+
         freshDataSnapshot = freshData
       })
+
+      // CPR-1A: Generate CPR records — non-blocking, never affects approval response
+      if (finalStatus === REQUEST_STATUS.APPROVED) {
+        createCprFromPsm(freshDataSnapshot, approval_request_id).catch(err => {
+          console.error('[CPR-1A] Unhandled error in createCprFromPsm:', err)
+        })
+      }
 
       // EML-1C: Post-transaction notifications — non-blocking, never affects response
       try {

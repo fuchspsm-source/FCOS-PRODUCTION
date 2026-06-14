@@ -85,6 +85,7 @@ exports.createShipTo     = shipTo.createShipTo
 exports.updateShipTo     = shipTo.updateShipTo
 exports.activateShipTo   = shipTo.activateShipTo
 exports.deactivateShipTo = shipTo.deactivateShipTo
+exports.getShipTosByCustomer = shipTo.getShipTosByCustomer
 exports.updateUserManager   = users.updateUserManager
 exports.updateUserPosition  = users.updateUserPosition
 const positions = require('./positions')
@@ -167,3 +168,43 @@ exports.fcos_getPsmDetail = require('./psmRead').getPsmDetail
 // Package PSM-PDF-1C: Get PSM PDF
 exports.fcos_getPsmPdf = require('./psmRead').getPsmPdf
 
+
+exports.fcos_resolveCprPrice = require('./cpr/resolveCprPrice').resolveCprPrice
+exports.fcos_listCprRecords = require('./cpr/listCprRecords').listCprRecords
+
+// PO-2: Segment Master
+const segments = require('./segments')
+exports.listSegments   = segments.listSegments
+exports.getSegment     = segments.getSegment
+exports.createSegment  = segments.createSegment
+exports.updateSegment  = segments.updateSegment
+
+// PO-6: Save PO
+const po = require('./po')
+exports.savePo  = po.savePo
+exports.getPoPdf = po.getPoPdf
+
+// PO-FE-2: Customer Invitation Flow
+exports.createCustomerInvitation = require('./portal/createCustomerInvitation').createCustomerInvitation
+exports.acceptCustomerInvitation = require('./portal/acceptCustomerInvitation').acceptCustomerInvitation
+
+// PO-FE-3: Portal Session Validation
+exports.portalWhoAmI = require('./portal/portalWhoAmI').portalWhoAmI
+
+// PO-FE-4: Portal Bootstrap
+exports.portalBootstrap = require('./portal/portalBootstrap').portalBootstrap
+
+// PO-FE-5: Portal Product Search
+exports.portalSearchProducts = require('./portal/portalSearchProducts').portalSearchProducts
+
+// PO-FE-6: Portal Price Resolver
+exports.portalResolvePrice = require('./portal/portalResolvePrice').portalResolvePrice
+
+// PO-FE-7B: Portal Save PO
+exports.portalSavePo = require('./portal/portalSavePo').portalSavePo
+
+// PO-FE-8: Portal PDF
+exports.portalGetPoPdf = require('./portal/portalGetPoPdf').portalGetPoPdf
+
+// PO-UI-3: Portal List Segments
+exports.portalListSegments = require('./portal/portalListSegments').portalListSegments
