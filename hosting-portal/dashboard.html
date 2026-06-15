@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO List — Fuchs Portal</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/portal.css">
+  <style>
+    .page-title { font-size:1.4rem; font-weight:700; color:#1a3c6b; margin-bottom:20px; }
+    .btn-new { background:#C74437; color:#fff; border:none; padding:10px 20px;
+               border-radius:6px; font-weight:600; cursor:pointer; font-size:.9rem; }
+    .btn-new:hover { background:#a83328; }
+    .btn-view { background:#1a3c6b; color:#fff; border:none; padding:6px 14px;
+                border-radius:4px; font-size:.82rem; cursor:pointer; font-weight:600; }
+    .btn-view:hover { background:#14305a; }
+    .status-badge { display:inline-block; padding:3px 10px; border-radius:12px;
+                    font-size:.78rem; font-weight:600; }
+    .status-confirmed { background:#dcfce7; color:#166534; }
+    .empty-state { text-align:center; padding:60px 0; color:#94a3b8; font-size:.95rem; }
+  </style>
+</head>
+<body>
+  <div id="portal-auth-guard"></div>
+  <div class="portal-layout">
+    <div class="portal-content" style="max-width:900px;margin:0 auto;padding:32px 16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div class="page-title">Purchase Orders</div>
+        <button class="btn-new" onclick="window.location.href='/po/new.html'">+ Buat PO Baru</button>
+      </div>
+
+      <div class="card">
+        <div id="loading" style="padding:40px 0;text-align:center;color:#94a3b8;">Memuat data...</div>
+        <div id="error-box" class="alert alert--error hidden"></div>
+        <div id="table-wrap" class="hidden">
+          <div class="table-wrapper" style="border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>PO Number</th>
+                  <th>Tanggal</th>
+                  <th>Status</th>
+                  <th style="text-align:right;">Grand Total</th>
+                  <th style="text-align:center;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="po-tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="empty-state hidden">Belum ada PO.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="/js/firebase-init.js"></script>
+  <script src="/js/portal-api.js"></script>
+  <script src="/js/portal-auth.js"></script>
+  <script>
+    PORTAL.initPage().then(loadPos)
+
+    function fmtRp(n) {
+      return 'Rp ' + Number(n).toLocaleString('id-ID')
+    }
+    function fmtDate(str) {
+      if (!str) return '—'
+      var parts = str.split('-')
+      var months = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des']
+      return parts[2] + ' ' + months[parseInt(parts[1])] + ' ' + parts[0]
+    }
+
+    async function loadPos() {
+      try {
+        var data = await PORTAL.api('portalListPos', 'GET')
+        var pos  = data.pos || []
+
+        document.getElementById('loading').classList.add('hidden')
+        document.getElementById('table-wrap').classList.remove('hidden')
+
+        if (pos.length === 0) {
+          document.getElementById('empty-state').classList.remove('hidden')
+          return
+        }
+
+        var tbody = document.getElementById('po-tbody')
+        tbody.innerHTML = pos.map(function(po) {
+          return '<tr>' +
+            '<td style="font-weight:600;color:#1a3c6b;">' + po.po_number + '</td>' +
+            '<td>' + fmtDate(po.po_date) + '</td>' +
+            '<td><span class="status-badge status-confirmed">' + po.status + '</span></td>' +
+            '<td style="text-align:right;font-weight:600;">' + fmtRp(po.grand_total) + '</td>' +
+            '<td style="text-align:center;"><button class="btn-view" onclick="viewPo(\'' + po.po_number + '\')">Lihat</button></td>' +
+          '</tr>'
+        }).join('')
+
+      } catch(err) {
+        document.getElementById('loading').classList.add('hidden')
+        document.getElementById('error-box').textContent = 'Gagal memuat PO: ' + err.message
+        document.getElementById('error-box').classList.remove('hidden')
+      }
+    }
+
+    function viewPo(po_number) {
+      window.location.href = '/po/detail.html?po_number=' + encodeURIComponent(po_number)
+    }
+  </script>
+</body>
+</html>

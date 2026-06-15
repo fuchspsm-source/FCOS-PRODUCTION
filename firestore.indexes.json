@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "po_headers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

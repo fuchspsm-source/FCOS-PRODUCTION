@@ -25,6 +25,10 @@
         "destination": "/po/detail.html"
       },
       {
+        "source": "/dashboard",
+        "destination": "/dashboard.html"
+      },
+      {
         "source": "**",
         "destination": "/login.html"
       }
