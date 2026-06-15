@@ -326,10 +326,8 @@ var importJobId     = null
 
 FCOS.initPage().then(function (user) {
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
-  document.getElementById('topbar-name').textContent  = user.name
-  document.getElementById('sidebar-footer').innerHTML =
-    '<div>' + escHtml(user.name) + '</div>' +
-    '<div class="mt-4 text-small">' + FCOS.formatRoles(user.roles) + '</div>'
+  document.getElementById('topbar-name').textContent = user.name
+  FCOS_SIDEBAR.build(user)
   document.getElementById('loading').style.display = 'none'
   document.getElementById('main-content').classList.remove('hidden')
   loadAll()
