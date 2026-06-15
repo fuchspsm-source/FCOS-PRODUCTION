@@ -28,6 +28,7 @@ async function savePoCore(payload, actorUid) {
     shipto_code, shipto_name, shipto_address,
     segment_code, segment_name,
     sales_uid, sales_name, sales_email,
+    fli_sales_name,
     lines
   } = payload || {}
 
@@ -175,6 +176,7 @@ async function savePoCore(payload, actorUid) {
       sales_uid,
       sales_name       : sales_name     || '',
       sales_email      : sales_email    || '',
+      fli_sales_name   : fli_sales_name || '',
       total_lines      : lines.length,
       subtotal,
       vat_amount,

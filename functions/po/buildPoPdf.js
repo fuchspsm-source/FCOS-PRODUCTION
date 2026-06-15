@@ -211,7 +211,7 @@ function buildPoPdf(hdr, lines, po_number, res) {
   // 2 signature cols: customer signatory (left) + FLI Sales Manager (right)
   const sigCols = [
     { label: 'Dibuat Oleh',    name: hdr.sales_name || '', title: hdr.customer_name || '' },
-    { label: 'Disetujui Oleh', name: '',                   title: 'Sales Manager\nPT. Fuchs Lubricants Indonesia' },
+    { label: 'Disetujui Oleh', name: hdr.fli_sales_name || '', title: 'Sales Manager\nPT. Fuchs Lubricants Indonesia' },
   ]
   const sigW = PW / 2
   const sigY = doc.y

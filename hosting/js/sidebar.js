@@ -20,6 +20,7 @@
 
     { type: 'section', label: 'COMMERCIAL', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
     { label: 'Sales Budget',           href: '/sales-budget/sales-budget.html',       roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
+    { label: 'Segment Registry',       href: '/segments/list.html',                   roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
     { label: 'CPR Registry',           href: '/cpr/list.html',                        roles: ['SUPER_ADMIN', 'ADMIN'] },
 
     { type: 'section', label: 'PSM', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES'] },

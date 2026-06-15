@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Segment Registry</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Segment Registry</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header" style="margin-bottom:20px;">
+          <div class="page-header__title">Segment Registry</div>
+          <button class="btn btn--primary" onclick="openCreateModal()">+ Tambah Segment</button>
+        </div>
+
+        <div class="filter-tabs" style="margin-bottom:20px;">
+          <button class="filter-tab active" onclick="switchTab('registry', this)">Registry</button>
+          <button class="filter-tab" onclick="switchTab('import', this)">Import Excel</button>
+        </div>
+
+        <!-- TAB REGISTRY -->
+        <div id="tab-registry">
+          <div class="card">
+            <div class="table-wrapper">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Segment Code</th>
+                    <th>Segment Name</th>
+                    <th>Status</th>
+                    <th style="text-align:center;">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="seg-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB IMPORT -->
+        <div id="tab-import" class="hidden">
+          <div class="card" style="max-width:600px;">
+            <div class="card__title" style="margin-bottom:16px;">Import dari Excel</div>
+            <p class="text-muted text-small" style="margin-bottom:16px;">
+              Format: 2 kolom — <strong>SEGMENT_CODE</strong> dan <strong>SEGMENT_NAME</strong>. Row pertama = header.
+            </p>
+            <div class="form-group">
+              <input type="file" id="import-file" accept=".xlsx,.xls" class="form-input">
+            </div>
+            <button class="btn btn--primary" style="margin-top:12px;" onclick="importExcel()">Proses Import</button>
+            <div id="import-log" style="margin-top:16px;font-size:.85rem;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE/EDIT MODAL -->
+<div class="modal hidden" id="modal">
+  <div class="modal__backdrop" onclick="closeModal()"></div>
+  <div class="modal__box">
+    <div class="modal__header">
+      <div class="modal__title" id="modal-title">Tambah Segment</div>
+      <button class="modal__close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group">
+        <label class="form-label">Segment Code</label>
+        <input type="text" class="form-input" id="inp-code" placeholder="e.g. IND">
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label">Segment Name</label>
+        <input type="text" class="form-input" id="inp-name" placeholder="e.g. Industrial">
+      </div>
+      <div id="modal-error" class="alert alert--error hidden" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="closeModal()">Batal</button>
+      <button class="btn btn--primary" id="btn-save-modal" onclick="saveSegment()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+var segments  = []
+var editingId = null
+
+FCOS.initPage().then(function(user) {
+  document.getElementById('topbar-name').textContent = user.name
+  document.getElementById('btn-logout').addEventListener('click', FCOS.logout)
+  FCOS_SIDEBAR.build(user)
+  loadSegments()
+})
+
+function switchTab(tab, btn) {
+  document.getElementById('tab-registry').classList.add('hidden')
+  document.getElementById('tab-import').classList.add('hidden')
+  document.getElementById('tab-' + tab).classList.remove('hidden')
+  document.querySelectorAll('.filter-tab').forEach(function(b) { b.classList.remove('active') })
+  btn.classList.add('active')
+}
+
+async function loadSegments() {
+  try {
+    var data = await FCOS.api('listSegments', 'GET')
+    segments = data.segments || []
+    renderTable()
+    document.getElementById('loading').classList.add('hidden')
+    document.getElementById('main-content').classList.remove('hidden')
+  } catch(e) {
+    document.getElementById('loading').textContent = 'Gagal memuat: ' + e.message
+  }
+}
+
+function renderTable() {
+  var tbody = document.getElementById('seg-tbody')
+  if (!segments.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:24px;">Belum ada segment.</td></tr>'
+    return
+  }
+  tbody.innerHTML = segments.map(function(s) {
+    var badge = s.active
+      ? '<span class="badge badge--green">Active</span>'
+      : '<span class="badge badge--red">Inactive</span>'
+    var toggleLabel = s.active ? 'Deactivate' : 'Activate'
+    return '<tr>' +
+      '<td style="font-weight:600;">' + esc(s.segment_code) + '</td>' +
+      '<td>' + esc(s.segment_name) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td style="text-align:center;">' +
+        '<button class="btn btn--secondary btn--sm" style="margin-right:6px;" onclick="openEditModal(\'' + s.id + '\')">Edit</button>' +
+        '<button class="btn btn--secondary btn--sm" onclick="toggleActive(\'' + s.id + '\',' + s.active + ')">' + toggleLabel + '</button>' +
+      '</td>' +
+    '</tr>'
+  }).join('')
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+function openCreateModal() {
+  editingId = null
+  document.getElementById('modal-title').textContent = 'Tambah Segment'
+  document.getElementById('inp-code').value = ''
+  document.getElementById('inp-code').disabled = false
+  document.getElementById('inp-name').value = ''
+  document.getElementById('modal-error').classList.add('hidden')
+  document.getElementById('modal').classList.remove('hidden')
+}
+
+function openEditModal(id) {
+  var seg = segments.find(function(s) { return s.id === id })
+  if (!seg) return
+  editingId = id
+  document.getElementById('modal-title').textContent = 'Edit Segment'
+  document.getElementById('inp-code').value = seg.segment_code
+  document.getElementById('inp-code').disabled = true
+  document.getElementById('inp-name').value = seg.segment_name
+  document.getElementById('modal-error').classList.add('hidden')
+  document.getElementById('modal').classList.remove('hidden')
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden')
+  editingId = null
+}
+
+async function saveSegment() {
+  var code = document.getElementById('inp-code').value.trim()
+  var name = document.getElementById('inp-name').value.trim()
+  var err  = document.getElementById('modal-error')
+  var btn  = document.getElementById('btn-save-modal')
+  err.classList.add('hidden')
+  if (!editingId && !code) { err.textContent = 'Segment Code wajib diisi.'; err.classList.remove('hidden'); return }
+  if (!name) { err.textContent = 'Segment Name wajib diisi.'; err.classList.remove('hidden'); return }
+  FCOS.setLoading(btn, 'Menyimpan...')
+  try {
+    if (editingId) {
+      await FCOS.api('updateSegment', 'POST', { id: editingId, segment_name: name })
+      var idx = segments.findIndex(function(s) { return s.id === editingId })
+      if (idx !== -1) segments[idx].segment_name = name
+    } else {
+      var res = await FCOS.api('createSegment', 'POST', { segment_code: code, segment_name: name })
+      segments.push({ id: res.id, segment_code: code, segment_name: name, active: true })
+    }
+    renderTable()
+    closeModal()
+  } catch(e) {
+    err.textContent = e.message
+    err.classList.remove('hidden')
+  } finally {
+    FCOS.clearLoading(btn, 'Simpan')
+  }
+}
+
+async function toggleActive(id, currentActive) {
+  try {
+    await FCOS.api('updateSegment', 'POST', { id: id, active: !currentActive })
+    var idx = segments.findIndex(function(s) { return s.id === id })
+    if (idx !== -1) segments[idx].active = !currentActive
+    renderTable()
+  } catch(e) {
+    alert('Error: ' + e.message)
+  }
+}
+
+async function importExcel() {
+  var file = document.getElementById('import-file').files[0]
+  var log  = document.getElementById('import-log')
+  if (!file) { log.innerHTML = '<span style="color:red;">Pilih file Excel dulu.</span>'; return }
+
+  log.innerHTML = 'Memproses...'
+
+  var reader = new FileReader()
+  reader.onload = async function(e) {
+    try {
+      var wb   = XLSX.read(e.target.result, { type: 'array' })
+      var ws   = wb.Sheets[wb.SheetNames[0]]
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+
+      if (rows.length < 2) { log.innerHTML = '<span style="color:red;">File kosong atau hanya header.</span>'; return }
+
+      // Validate header
+      var header = rows[0].map(function(h) { return String(h).trim().toUpperCase() })
+      var codeIdx = header.indexOf('SEGMENT_CODE')
+      var nameIdx = header.indexOf('SEGMENT_NAME')
+      if (codeIdx === -1 || nameIdx === -1) {
+        log.innerHTML = '<span style="color:red;">Header harus SEGMENT_CODE dan SEGMENT_NAME.</span>'
+        return
+      }
+
+      var dataRows = rows.slice(1).filter(function(r) { return r[codeIdx] && r[nameIdx] })
+      var results  = []
+      var created  = 0
+      var updated  = 0
+      var errors   = 0
+
+      for (var i = 0; i < dataRows.length; i++) {
+        var code = String(dataRows[i][codeIdx]).trim()
+        var name = String(dataRows[i][nameIdx]).trim()
+        if (!code || !name) continue
+
+        var existing = segments.find(function(s) { return s.segment_code === code })
+        try {
+          if (existing) {
+            await FCOS.api('updateSegment', 'POST', { id: existing.id, segment_name: name })
+            existing.segment_name = name
+            updated++
+            results.push('<span style="color:green;">✓ UPDATE: ' + esc(code) + ' → ' + esc(name) + '</span>')
+          } else {
+            var res = await FCOS.api('createSegment', 'POST', { segment_code: code, segment_name: name })
+            segments.push({ id: res.id, segment_code: code, segment_name: name, active: true })
+            created++
+            results.push('<span style="color:green;">✓ CREATE: ' + esc(code) + ' → ' + esc(name) + '</span>')
+          }
+        } catch(e) {
+          errors++
+          results.push('<span style="color:red;">✗ ERROR ' + esc(code) + ': ' + e.message + '</span>')
+        }
+      }
+
+      renderTable()
+      log.innerHTML =
+        '<strong>Selesai:</strong> ' + created + ' created, ' + updated + ' updated, ' + errors + ' error<br><br>' +
+        results.join('<br>')
+
+    } catch(e) {
+      log.innerHTML = '<span style="color:red;">Gagal baca file: ' + e.message + '</span>'
+    }
+  }
+  reader.readAsArrayBuffer(file)
+}
+</script>
+</body>
+</html>

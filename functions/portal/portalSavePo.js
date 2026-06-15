@@ -87,6 +87,7 @@ exports.portalSavePo = onRequest({ region: REGION }, run(
       shipto_code,
       segment_code,
       signature_name,
+      fli_sales_name,
       lines
     } = req.body || {}
 
@@ -180,6 +181,7 @@ exports.portalSavePo = onRequest({ region: REGION }, run(
         sales_uid        : req.portalUser.uid,
         sales_name       : (signature_name || '').trim() || cust.customerName,
         sales_email      : req.portalUser.email || '',
+        fli_sales_name   : (fli_sales_name || '').trim(),
         lines            : resolvedLines
       }
 

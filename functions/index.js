@@ -207,6 +207,7 @@ exports.portalSavePo = require('./portal/portalSavePo').portalSavePo
 exports.portalGetPoPdf = require('./portal/portalGetPoPdf').portalGetPoPdf
 
 // PO-UI-3: Portal List Segments
-exports.portalListSegments = require('./portal/portalListSegments').portalListSegments
+exports.portalListSegments  = require('./portal/portalListSegments').portalListSegments
+exports.portalListSalesReps = require('./portal/portalListSalesReps').portalListSalesReps
 exports.portalListPos      = require('./portal/portalListPos').portalListPos
 exports.fcos_listAllPos    = require('./po/listAllPos').listAllPos

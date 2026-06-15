@@ -114,6 +114,18 @@
 
       </div>
 
+      <!-- SALES REP -->
+      <div class="po-header-grid" style="margin-bottom:24px;">
+        <div class="card" style="margin-bottom:0;">
+          <div class="section-title">Sales Representative FLI</div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Sales Representative</label>
+            <select id="fli-sales-rep" class="form-control">
+              <option value="">— Pilih Sales Rep —</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <!-- SEGMENT + REFERENCE -->
       <div class="po-header-grid" style="margin-bottom:24px;">
         <div class="card" style="margin-bottom:0;">
@@ -200,6 +212,7 @@
           <label>Nama Penandatangan</label>
           <input type="text" id="signature-name" class="form-control" placeholder="Nama lengkap">
         </div>
+
         <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
           <button id="btn-save" class="btn btn--primary" onclick="savePo()" disabled>
             Save PO
@@ -253,14 +266,23 @@ PORTAL.initPage().then(function(user) {
   // Load bootstrap + segments in parallel
   Promise.all([
     PORTAL.api('portalBootstrap', 'GET'),
-    PORTAL.api('portalListSegments', 'GET')
+    PORTAL.api('portalListSegments', 'GET'),
+    PORTAL.api('portalListSalesReps', 'GET')
   ]).then(function(results) {
     bootstrapData = results[0]
     var segData   = results[1]
+    var repData   = results[2]
 
     renderCustomerInfo(bootstrapData.customer)
     renderShipToDropdown(bootstrapData.ship_tos)
     renderSegmentDropdown(segData.segments || [])
+
+    var sel = document.getElementById('fli-sales-rep')
+    ;(repData.reps || []).forEach(function(r) {
+      var opt = document.createElement('option')
+      opt.value = r.name; opt.textContent = r.name
+      sel.appendChild(opt)
+    })
 
     document.getElementById('loading').classList.add('hidden')
     document.getElementById('main-content').classList.remove('hidden')
@@ -451,6 +473,21 @@ function onQtyChange(i, val) {
   resolveLinePrice(i)
 }
 
+async function loadSalesReps() {
+  try {
+    var data = await PORTAL.api('portalListSalesReps', 'GET')
+    var sel  = document.getElementById('fli-sales-rep')
+    ;(data.reps || []).forEach(function(r) {
+      var opt = document.createElement('option')
+      opt.value       = r.name
+      opt.textContent = r.name
+      sel.appendChild(opt)
+    })
+  } catch(e) {
+    console.error('loadSalesReps:', e)
+  }
+}
+
 async function resolveLinePrice(i) {
   var ln = lines[i]
   ln.resolving = true
@@ -534,6 +571,7 @@ async function savePo() {
     shipto_code         : shipToCode,
     segment_code        : segCode,
     signature_name      : sigName,
+    fli_sales_name      : document.getElementById('fli-sales-rep').value || '',
     lines               : lines.map(function(l) {
       return { product_code: l.product_code, qty: l.qty }
     })
@@ -566,6 +604,7 @@ function resetForm() {
   document.getElementById('shipto-select').value = ''
   document.getElementById('segment-select').value = ''
   document.getElementById('signature-name').value = ''
+  document.getElementById('fli-sales-rep').value  = ''
   document.getElementById('po-reference').value = ''
   document.getElementById('shipto-address').value = ''
   clearQuotaAlert()
