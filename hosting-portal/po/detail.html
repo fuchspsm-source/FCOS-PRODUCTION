@@ -43,53 +43,7 @@
       <span class="po-badge">CONFIRMED</span>
     </div>
 
-    <!-- PO INFO CARD -->
-    <div class="card">
-      <div class="card__title">Informasi PO</div>
-      <dl class="detail-grid" style="grid-template-columns:160px 1fr;">
-        <dt>Tanggal</dt>        <dd id="info-date">—</dd>
-        <dt>Customer</dt>       <dd id="info-customer">—</dd>
-        <dt>Kode Customer</dt>  <dd id="info-customer-code">—</dd>
-        <dt>Alamat Customer</dt><dd id="info-customer-address">—</dd>
-        <dt>Ship-To</dt>        <dd id="info-shipto">—</dd>
-        <dt>Alamat Kirim</dt>   <dd id="info-shipto-address">—</dd>
-        <dt>Segment</dt>        <dd id="info-segment">—</dd>
-      </dl>
-    </div>
 
-    <!-- LINE ITEMS -->
-    <div class="card" style="margin-top:16px;">
-      <div class="card__title">Daftar Produk</div>
-      <div class="table-wrapper" style="border:none;">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Material Code</th>
-              <th>Description</th>
-              <th style="text-align:center;">Qty</th>
-              <th style="text-align:right;">Unit Price</th>
-              <th style="text-align:right;">Net Amount</th>
-            </tr>
-          </thead>
-          <tbody id="lines-body"></tbody>
-        </table>
-      </div>
-
-      <!-- Totals -->
-      <div style="display:flex;justify-content:flex-end;margin-top:16px;">
-        <table style="width:280px;font-size:.9rem;">
-          <tr><td style="color:#64748b;padding:4px 10px;">Subtotal</td>
-              <td style="text-align:right;font-weight:600;padding:4px 10px;" id="total-subtotal">—</td></tr>
-          <tr><td style="color:#64748b;padding:4px 10px;">PPN 11%</td>
-              <td style="text-align:right;padding:4px 10px;" id="total-ppn">—</td></tr>
-          <tr style="border-top:2px solid #1a3c6b;">
-            <td style="font-weight:700;padding:10px 10px 4px;">Grand Total</td>
-            <td style="text-align:right;font-weight:800;color:#C74437;font-size:1.05rem;padding:10px 10px 4px;" id="total-grand">—</td>
-          </tr>
-        </table>
-      </div>
-    </div>
 
     <!-- ACTIONS -->
     <div class="action-bar">
@@ -122,37 +76,10 @@ PORTAL.initPage().then(function(user) {
 
 async function loadPoDetail() {
   try {
-    // Load PO header via portalGetPoPdf ownership check is backend-enforced
-    // We use a lightweight approach: hit portalBootstrap for customer data
-    // then load po_headers via a dedicated read endpoint
-    // Since we don't have a portalGetPoDetail endpoint yet,
-    // we derive display data from what we know + PDF metadata
-
-    // Actually: use existing portalBootstrap for customer context
-    // and display po_number from URL — then just offer PDF download
-    // Full detail needs portalGetPoDetail (future package)
-    // For now: show what we know from URL + bootstrap
-
-    var bootstrap = await PORTAL.api('portalBootstrap', 'GET')
-    var cust = bootstrap.customer
-
-    // Set PO number display
     document.getElementById('display-po-ref').textContent = po_number
     document.getElementById('display-po-sys').textContent = 'No. Sistem: ' + po_number
-
-    // Fill customer info
-    document.getElementById('info-customer').textContent         = cust.customer_name || '—'
-    document.getElementById('info-customer-code').textContent    = cust.customer_code || '—'
-    document.getElementById('info-customer-address').textContent = cust.address || '—'
-
-    // Set date = today (PO was just created)
-    document.getElementById('info-date').textContent = new Date().toLocaleDateString('id-ID', {
-      day: '2-digit', month: 'long', year: 'numeric'
-    })
-
     document.getElementById('loading').classList.add('hidden')
     document.getElementById('main-content').classList.remove('hidden')
-
   } catch(err) {
     showError('Gagal memuat data: ' + err.message)
   }
