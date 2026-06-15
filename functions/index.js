@@ -211,3 +211,4 @@ exports.portalListSegments  = require('./portal/portalListSegments').portalListS
 exports.portalListSalesReps = require('./portal/portalListSalesReps').portalListSalesReps
 exports.portalListPos      = require('./portal/portalListPos').portalListPos
 exports.fcos_listAllPos    = require('./po/listAllPos').listAllPos
+exports.fcos_getPoDetail   = require('./po/getPoDetail').getPoDetail

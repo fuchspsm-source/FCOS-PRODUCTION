@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — PSM Report</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">PSM Report</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header" style="margin-bottom:20px;">
+          <div class="page-header__title">PSM Report</div>
+          <button class="btn btn--primary" id="btn-export" onclick="exportExcel()">Export Excel</button>
+        </div>
+
+        <!-- FILTERS -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <div>
+              <label class="form-label" style="font-size:.8rem;">Status</label>
+              <select class="form-input" id="filter-status" style="min-width:140px;" onchange="applyFilter()">
+                <option value="">Semua</option>
+                <option value="APPROVED">Approved</option>
+                <option value="SUBMITTED">Submitted</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="DRAFT">Draft</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" style="font-size:.8rem;">Dari</label>
+              <input type="date" class="form-input" id="filter-from" onchange="applyFilter()">
+            </div>
+            <div>
+              <label class="form-label" style="font-size:.8rem;">Sampai</label>
+              <input type="date" class="form-input" id="filter-to" onchange="applyFilter()">
+            </div>
+            <div style="margin-top:18px;">
+              <button class="btn btn--secondary btn--sm" onclick="resetFilter()">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table class="table" id="psm-table">
+              <thead>
+                <tr>
+                  <th>PSM Number</th>
+                  <th>Customer</th>
+                  <th>Sales</th>
+                  <th>Product Code</th>
+                  <th>Product Name</th>
+                  <th style="text-align:right;">DBP</th>
+                  <th style="text-align:right;">Cost</th>
+                  <th style="text-align:right;">Qty</th>
+                  <th style="text-align:right;">Proposed Price</th>
+                  <th style="text-align:right;">Total Sales</th>
+                  <th style="text-align:right;">Total Cost</th>
+                  <th style="text-align:right;">NC%</th>
+                  <th>Validity From</th>
+                  <th>Validity To</th>
+                  <th>Status</th>
+                  <th>Approved At</th>
+                  <th>Comment</th>
+                </tr>
+              </thead>
+              <tbody id="psm-tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="text-muted hidden" style="padding:40px;text-align:center;">Tidak ada data.</div>
+          <div id="row-count" style="padding:8px 0;font-size:.8rem;color:#64748b;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+var allRows = []
+var filtered = []
+
+FCOS.initPage().then(function(user) {
+  document.getElementById('topbar-name').textContent = user.name
+  document.getElementById('btn-logout').addEventListener('click', FCOS.logout)
+  FCOS_SIDEBAR.build(user)
+  loadData()
+})
+
+async function loadData() {
+  try {
+    var list = await FCOS.api('fcos_listPsms', 'GET')
+    var psms = list.items || []
+    allRows = []
+
+    for (var i = 0; i < psms.length; i++) {
+      var d = await FCOS.api('fcos_getPsmDetail', 'GET', null, { psm_id: psms[i].psm_id })
+      var h = d.psm
+      var ap = d.approval || {}
+      ;(d.items || []).forEach(function(item) {
+        allRows.push({
+          psm_number      : h.psm_number,
+          customer_code   : h.customer_code,
+          customer_name   : h.customer_name,
+          sales_name      : h.sales_name,
+          validity_from   : h.validity_from,
+          validity_to     : h.validity_to,
+          status          : h.status,
+          approved_at     : ap.approved_at || '',
+          decision_comment: ap.decision_comment || '',
+          product_code    : item.product_code,
+          product_name    : item.product_name,
+          dbp             : item.dbp,
+          cost            : item.cost,
+          qty             : item.qty,
+          proposed_price  : item.proposed_price,
+          total_sales     : item.total_sales,
+          total_cost      : item.total_cost,
+          nc              : item.nc,
+          created_at      : h.created_at
+        })
+      })
+    }
+
+    filtered = allRows.slice()
+    renderTable()
+    document.getElementById('loading').classList.add('hidden')
+    document.getElementById('main-content').classList.remove('hidden')
+  } catch(e) {
+    document.getElementById('loading').textContent = 'Gagal memuat: ' + e.message
+  }
+}
+
+function applyFilter() {
+  var status = document.getElementById('filter-status').value
+  var from   = document.getElementById('filter-from').value
+  var to     = document.getElementById('filter-to').value
+
+  filtered = allRows.filter(function(r) {
+    if (status && r.status !== status) return false
+    if (from && r.validity_from < from) return false
+    if (to && r.validity_to > to) return false
+    return true
+  })
+  renderTable()
+}
+
+function resetFilter() {
+  document.getElementById('filter-status').value = ''
+  document.getElementById('filter-from').value   = ''
+  document.getElementById('filter-to').value     = ''
+  filtered = allRows.slice()
+  renderTable()
+}
+
+function fmtRp(n) { return n != null ? Number(n).toLocaleString('id-ID') : '—' }
+function fmtPct(n) { return n != null ? Number(n).toFixed(1) + '%' : '—' }
+
+function renderTable() {
+  var tbody = document.getElementById('psm-tbody')
+  var empty = document.getElementById('empty-state')
+  var count = document.getElementById('row-count')
+
+  if (!filtered.length) {
+    tbody.innerHTML = ''
+    empty.classList.remove('hidden')
+    count.textContent = ''
+    return
+  }
+
+  empty.classList.add('hidden')
+  count.textContent = filtered.length + ' baris'
+
+  tbody.innerHTML = filtered.map(function(r) {
+    var statusColor = r.status === 'APPROVED' ? 'badge--green' : r.status === 'REJECTED' ? 'badge--red' : 'badge--yellow'
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-weight:600;">' + (r.psm_number||'') + '</td>' +
+      '<td>' + (r.customer_name||'') + '</td>' +
+      '<td>' + (r.sales_name||'') + '</td>' +
+      '<td>' + (r.product_code||'') + '</td>' +
+      '<td>' + (r.product_name||'') + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.dbp) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.cost) + '</td>' +
+      '<td style="text-align:right;">' + (r.qty||0) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.proposed_price) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.total_sales) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.total_cost) + '</td>' +
+      '<td style="text-align:right;">' + fmtPct(r.nc) + '</td>' +
+      '<td>' + (r.validity_from||'') + '</td>' +
+      '<td>' + (r.validity_to||'') + '</td>' +
+      '<td><span class="badge ' + statusColor + '">' + r.status + '</span></td>' +
+      '<td>' + (r.approved_at ? r.approved_at.slice(0,10) : '—') + '</td>' +
+      '<td>' + (r.decision_comment||'') + '</td>' +
+    '</tr>'
+  }).join('')
+}
+
+function exportExcel() {
+  var data = [['PSM Number','Customer Code','Customer Name','Sales','Product Code','Product Name','DBP','Cost','Qty','Proposed Price','Total Sales','Total Cost','NC%','Validity From','Validity To','Status','Approved At','Comment']]
+  filtered.forEach(function(r) {
+    data.push([r.psm_number,r.customer_code,r.customer_name,r.sales_name,r.product_code,r.product_name,r.dbp,r.cost,r.qty,r.proposed_price,r.total_sales,r.total_cost,r.nc,r.validity_from,r.validity_to,r.status,r.approved_at,r.decision_comment])
+  })
+  var ws = XLSX.utils.aoa_to_sheet(data)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'PSM Report')
+  XLSX.writeFile(wb, 'PSM_Report_' + new Date().toISOString().slice(0,10) + '.xlsx')
+}
+</script>
+</body>
+</html>

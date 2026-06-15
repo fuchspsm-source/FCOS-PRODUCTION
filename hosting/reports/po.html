@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — PO Report</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">PO Report</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header" style="margin-bottom:20px;">
+          <div class="page-header__title">PO Report</div>
+          <button class="btn btn--primary" onclick="exportExcel()">Export Excel</button>
+        </div>
+
+        <!-- FILTERS -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <div>
+              <label class="form-label" style="font-size:.8rem;">Customer</label>
+              <input type="text" class="form-input" id="filter-customer" placeholder="Cari customer..." style="min-width:200px;" oninput="applyFilter()">
+            </div>
+            <div>
+              <label class="form-label" style="font-size:.8rem;">Dari</label>
+              <input type="date" class="form-input" id="filter-from" onchange="applyFilter()">
+            </div>
+            <div>
+              <label class="form-label" style="font-size:.8rem;">Sampai</label>
+              <input type="date" class="form-input" id="filter-to" onchange="applyFilter()">
+            </div>
+            <div style="margin-top:18px;">
+              <button class="btn btn--secondary btn--sm" onclick="resetFilter()">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>PO Number</th>
+                  <th>PO Date</th>
+                  <th>Customer</th>
+                  <th>Ship-To</th>
+                  <th>Segment</th>
+                  <th>Sales</th>
+                  <th>Product Code</th>
+                  <th>Product Name</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th>Price Source</th>
+                  <th style="text-align:right;">Unit Price</th>
+                  <th style="text-align:right;">Line Total</th>
+                  <th style="text-align:right;">Subtotal</th>
+                  <th style="text-align:right;">VAT</th>
+                  <th style="text-align:right;">Grand Total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="po-tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="text-muted hidden" style="padding:40px;text-align:center;">Tidak ada data.</div>
+          <div id="row-count" style="padding:8px 0;font-size:.8rem;color:#64748b;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+var allRows = []
+var filtered = []
+
+FCOS.initPage().then(function(user) {
+  document.getElementById('topbar-name').textContent = user.name
+  document.getElementById('btn-logout').addEventListener('click', FCOS.logout)
+  FCOS_SIDEBAR.build(user)
+  loadData()
+})
+
+async function loadData() {
+  try {
+    var list = await FCOS.api('fcos_listAllPos', 'GET')
+    var pos  = list.pos || []
+    allRows  = []
+
+    for (var i = 0; i < pos.length; i++) {
+      var d = await FCOS.api('fcos_getPoDetail', 'GET', null, { po_number: pos[i].po_number })
+      var h = d.header
+      ;(d.lines || []).forEach(function(line) {
+        allRows.push({
+          po_number      : h.po_number,
+          po_reference   : h.po_reference_number || '',
+          po_date        : h.po_date,
+          customer_code  : h.customer_code,
+          customer_name  : h.customer_name,
+          shipto_code    : h.shipto_code,
+          shipto_name    : h.shipto_name,
+          segment_name   : h.segment_name,
+          sales_name     : h.sales_name,
+          fli_sales_name : h.fli_sales_name || '',
+          subtotal       : h.subtotal,
+          vat_amount     : h.vat_amount,
+          grand_total    : h.grand_total,
+          status         : h.status,
+          product_code   : line.product_code,
+          product_name   : line.product_name,
+          qty            : line.qty,
+          price_source   : line.price_source,
+          unit_price     : line.final_price,
+          line_total     : line.line_total,
+        })
+      })
+    }
+
+    filtered = allRows.slice()
+    renderTable()
+    document.getElementById('loading').classList.add('hidden')
+    document.getElementById('main-content').classList.remove('hidden')
+  } catch(e) {
+    document.getElementById('loading').textContent = 'Gagal memuat: ' + e.message
+  }
+}
+
+function applyFilter() {
+  var cust = document.getElementById('filter-customer').value.toLowerCase()
+  var from = document.getElementById('filter-from').value
+  var to   = document.getElementById('filter-to').value
+
+  filtered = allRows.filter(function(r) {
+    if (cust && !r.customer_name.toLowerCase().includes(cust) && !r.customer_code.toLowerCase().includes(cust)) return false
+    if (from && r.po_date < from) return false
+    if (to && r.po_date > to) return false
+    return true
+  })
+  renderTable()
+}
+
+function resetFilter() {
+  document.getElementById('filter-customer').value = ''
+  document.getElementById('filter-from').value     = ''
+  document.getElementById('filter-to').value       = ''
+  filtered = allRows.slice()
+  renderTable()
+}
+
+function fmtRp(n) { return n != null ? Number(n).toLocaleString('id-ID') : '—' }
+
+function renderTable() {
+  var tbody = document.getElementById('po-tbody')
+  var empty = document.getElementById('empty-state')
+  var count = document.getElementById('row-count')
+
+  if (!filtered.length) {
+    tbody.innerHTML = ''
+    empty.classList.remove('hidden')
+    count.textContent = ''
+    return
+  }
+
+  empty.classList.add('hidden')
+  count.textContent = filtered.length + ' baris'
+
+  tbody.innerHTML = filtered.map(function(r) {
+    var srcBadge = r.price_source === 'CPR'
+      ? '<span class="badge badge--green">CPR</span>'
+      : '<span class="badge">DBP</span>'
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-weight:600;">' + r.po_number + '</td>' +
+      '<td>' + r.po_date + '</td>' +
+      '<td>' + r.customer_name + '</td>' +
+      '<td>' + (r.shipto_name||'') + '</td>' +
+      '<td>' + (r.segment_name||'') + '</td>' +
+      '<td>' + (r.fli_sales_name || r.sales_name||'') + '</td>' +
+      '<td>' + r.product_code + '</td>' +
+      '<td>' + r.product_name + '</td>' +
+      '<td style="text-align:center;">' + r.qty + '</td>' +
+      '<td style="text-align:center;">' + srcBadge + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.unit_price) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.line_total) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.subtotal) + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(r.vat_amount) + '</td>' +
+      '<td style="text-align:right;font-weight:600;">' + fmtRp(r.grand_total) + '</td>' +
+      '<td><span class="badge badge--green">' + r.status + '</span></td>' +
+    '</tr>'
+  }).join('')
+}
+
+function exportExcel() {
+  var data = [['PO Number','PO Ref','PO Date','Customer Code','Customer Name','Ship-To','Segment','FLI Sales','Product Code','Product Name','Qty','Price Source','Unit Price','Line Total','Subtotal','VAT','Grand Total','Status']]
+  filtered.forEach(function(r) {
+    data.push([r.po_number,r.po_reference,r.po_date,r.customer_code,r.customer_name,r.shipto_name,r.segment_name,r.fli_sales_name||r.sales_name,r.product_code,r.product_name,r.qty,r.price_source,r.unit_price,r.line_total,r.subtotal,r.vat_amount,r.grand_total,r.status])
+  })
+  var ws = XLSX.utils.aoa_to_sheet(data)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'PO Report')
+  XLSX.writeFile(wb, 'PO_Report_' + new Date().toISOString().slice(0,10) + '.xlsx')
+}
+</script>
+</body>
+</html>
