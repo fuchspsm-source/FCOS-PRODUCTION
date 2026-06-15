@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Customer Invitations</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Customer Invitations</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header" style="margin-bottom:24px;">
+          <div class="page-header__title">Kirim Undangan Portal</div>
+        </div>
+
+        <div class="card" style="max-width:520px;margin-bottom:32px;">
+          <div class="card__title" style="margin-bottom:16px;">Undangan Baru</div>
+          <div class="form-group">
+            <label class="form-label">Customer</label>
+            <select class="form-input" id="inp-customer">
+              <option value="">— Pilih Customer —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="inp-email" placeholder="email@perusahaan.com">
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Nama</label>
+            <input type="text" class="form-input" id="inp-name" placeholder="Nama penerima">
+          </div>
+          <div id="form-error" class="alert alert--error hidden" style="margin-top:12px;"></div>
+          <div id="form-success" class="alert alert--success hidden" style="margin-top:12px;"></div>
+          <button class="btn btn--primary" id="btn-send" style="margin-top:16px;" onclick="sendInvitation()">Kirim Undangan</button>
+        </div>
+
+        <div class="card">
+          <div class="card__title" style="margin-bottom:16px;">Riwayat Undangan</div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Invitation ID</th>
+                  <th>Email</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="inv-tbody">
+                <tr><td colspan="4" class="text-muted" style="text-align:center;padding:24px;">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+FCOS.initPage().then(async function(user) {
+  document.getElementById('topbar-name').textContent = user.name
+  document.getElementById('btn-logout').addEventListener('click', FCOS.logout)
+  FCOS_SIDEBAR.build(user)
+  await loadCustomers()
+  document.getElementById('loading').classList.add('hidden')
+  document.getElementById('main-content').classList.remove('hidden')
+})
+
+async function loadCustomers() {
+  try {
+    var data = await FCOS.api('listCustomers', 'GET', null, { activeOnly: 'true' })
+    var sel  = document.getElementById('inp-customer')
+    ;(data.customers || []).forEach(function(c) {
+      var opt = document.createElement('option')
+      opt.value       = c.customerCode
+      opt.textContent = c.customerCode + ' — ' + c.customerName
+      sel.appendChild(opt)
+    })
+  } catch(e) {
+    console.error('loadCustomers:', e)
+  }
+}
+
+async function sendInvitation() {
+  var customer_code = document.getElementById('inp-customer').value.trim()
+  var email         = document.getElementById('inp-email').value.trim()
+  var name          = document.getElementById('inp-name').value.trim()
+  var errBox        = document.getElementById('form-error')
+  var okBox         = document.getElementById('form-success')
+  var btn           = document.getElementById('btn-send')
+
+  errBox.classList.add('hidden')
+  okBox.classList.add('hidden')
+
+  if (!customer_code) return showErr('Pilih customer terlebih dahulu.')
+  if (!email)         return showErr('Email wajib diisi.')
+  if (!name)          return showErr('Nama wajib diisi.')
+
+  btn.disabled = true
+  btn.textContent = 'Mengirim...'
+
+  try {
+    var data = await FCOS.api('createCustomerInvitation', 'POST', { customer_code, email, name })
+    if (data.error) throw new Error(data.error)
+
+    okBox.textContent = 'Undangan berhasil! ID: ' + data.invitation_id
+    okBox.classList.remove('hidden')
+
+    var tbody = document.getElementById('inv-tbody')
+    if (tbody.querySelector('td[colspan]')) tbody.innerHTML = ''
+    var tr = document.createElement('tr')
+    tr.innerHTML =
+      '<td>' + data.invitation_id + '</td>' +
+      '<td>' + email + '</td>' +
+      '<td>' + customer_code + '</td>' +
+      '<td><span class="badge badge--yellow">PENDING</span></td>'
+    tbody.insertBefore(tr, tbody.firstChild)
+
+    document.getElementById('inp-email').value    = ''
+    document.getElementById('inp-name').value     = ''
+    document.getElementById('inp-customer').value = ''
+
+  } catch(e) {
+    showErr(e.message)
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Kirim Undangan'
+  }
+}
+
+function showErr(msg) {
+  var box = document.getElementById('form-error')
+  box.textContent = msg
+  box.classList.remove('hidden')
+}
+</script>
+</body>
+</html>

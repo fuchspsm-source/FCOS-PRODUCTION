@@ -310,7 +310,7 @@
     FCOS.setLoading(btn, 'Menyimpan...')
     try {
       await FCOS.api('updateUserPosition', 'POST', {
-        target_uid  : editingUid,
+        uid         : editingUid,
         position_id : position || null
       })
       // Update local state
@@ -368,7 +368,7 @@
     FCOS.setLoading(btn, 'Menyimpan...')
     try {
       await FCOS.api('updateUserManager', 'POST', {
-        target_uid       : editingUid,
+        uid              : editingUid,
         manager_user_id  : managerUid || null
       })
       // Update local state

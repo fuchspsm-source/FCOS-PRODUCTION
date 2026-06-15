@@ -209,3 +209,4 @@ exports.portalGetPoPdf = require('./portal/portalGetPoPdf').portalGetPoPdf
 // PO-UI-3: Portal List Segments
 exports.portalListSegments = require('./portal/portalListSegments').portalListSegments
 exports.portalListPos      = require('./portal/portalListPos').portalListPos
+exports.fcos_listAllPos    = require('./po/listAllPos').listAllPos

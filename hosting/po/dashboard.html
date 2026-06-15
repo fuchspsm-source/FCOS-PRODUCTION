@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — PO Dashboard</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar__logo">FCOS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">PO Dashboard</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+        <div class="page-header" style="margin-bottom:20px;">
+          <div class="page-header__title">Purchase Orders</div>
+        </div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>PO Number</th>
+                  <th>Tanggal</th>
+                  <th>Customer</th>
+                  <th>Segment</th>
+                  <th style="text-align:right;">Grand Total</th>
+                  <th>Status</th>
+                  <th style="text-align:center;">PDF</th>
+                </tr>
+              </thead>
+              <tbody id="po-tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="text-muted hidden" style="padding:40px;text-align:center;">Belum ada PO.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+FCOS.initPage().then(async function(user) {
+  document.getElementById('topbar-name').textContent = user.name
+  document.getElementById('btn-logout').addEventListener('click', FCOS.logout)
+  FCOS_SIDEBAR.build(user)
+  await loadPos()
+})
+
+function fmtRp(n) {
+  return 'Rp ' + Number(n).toLocaleString('id-ID')
+}
+function fmtDate(str) {
+  if (!str) return '—'
+  var p = str.split('-')
+  var m = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des']
+  return p[2] + ' ' + m[parseInt(p[1])] + ' ' + p[0]
+}
+
+async function loadPos() {
+  try {
+    var data = await FCOS.api('fcos_listAllPos', 'GET')
+    renderPos(data.pos || [])
+  } catch(e) {
+    console.error('loadPos:', e)
+    renderPos([])
+  }
+}
+
+function renderPos(pos) {
+  document.getElementById('loading').classList.add('hidden')
+  document.getElementById('main-content').classList.remove('hidden')
+  if (!pos.length) {
+    document.getElementById('empty-state').classList.remove('hidden')
+    return
+  }
+  document.getElementById('po-tbody').innerHTML = pos.map(function(po) {
+    return '<tr>' +
+      '<td style="font-weight:600;">' + po.po_number + '</td>' +
+      '<td>' + fmtDate(po.po_date) + '</td>' +
+      '<td>' + (po.customer_name || po.customer_code) + '</td>' +
+      '<td>' + (po.segment_name || '—') + '</td>' +
+      '<td style="text-align:right;">' + fmtRp(po.grand_total) + '</td>' +
+      '<td><span class="badge badge--green">' + po.status + '</span></td>' +
+      '<td style="text-align:center;"><button class="btn btn--secondary btn--sm" onclick="downloadPdf(\'' + po.po_number + '\')">PDF</button></td>' +
+    '</tr>'
+  }).join('')
+}
+
+async function downloadPdf(po_number) {
+  try {
+    var blob = await FCOS.api('getPoPdf', 'GET', null, { po_number: po_number })
+    var url  = URL.createObjectURL(blob)
+    var a    = document.createElement('a'); a.href = url; a.download = po_number + '.pdf'; a.click()
+  } catch(e) {
+    alert('Error: ' + e.message)
+  }
+}
+</script>
+</body>
+</html>

@@ -173,23 +173,20 @@ exports.approveUser = run([requireAuth, requireActive, requireRole('SUPER_ADMIN'
       return res.status(400).json({ error: 'Cannot activate: authority_rank value is invalid. Use updateUserAuthorityRank to correct it.' })
     }
 
-    // Step 7 — manager_user_id
-    if (user.authority_rank !== AUTHORITY_RANK.MANAGING_DIRECTOR) {
-      if (!user.manager_user_id) {
-        return res.status(400).json({ error: 'Cannot activate: manager_user_id is not assigned. Use updateUserManager first.' })
-      }
-      const managerSnap = await db.collection('users').doc(user.manager_user_id).get()
-      if (!managerSnap.exists) {
-        return res.status(400).json({ error: 'Cannot activate: assigned manager does not exist. Use updateUserManager to reassign.' })
-      }
-      const managerStatus = managerSnap.data().status
-      if (managerStatus === STATUS.INACTIVE) {
-        return res.status(400).json({ error: 'Cannot activate: assigned manager is INACTIVE. Use updateUserManager to reassign.' })
-      }
-      if (managerStatus === STATUS.PENDING) {
-        return res.status(400).json({ error: 'Cannot activate: assigned manager is still PENDING. Manager must be ACTIVE first.' })
-      }
-    }
+     // Step 7 — manager_user_id (optional — can be set after activation)
+     if (user.manager_user_id) {
+       const managerSnap = await db.collection('users').doc(user.manager_user_id).get()
+       if (!managerSnap.exists) {
+         return res.status(400).json({ error: 'Cannot activate: assigned manager does not exist. Use updateUserManager to reassign.' })
+       }
+       const managerStatus = managerSnap.data().status
+       if (managerStatus === STATUS.INACTIVE) {
+         return res.status(400).json({ error: 'Cannot activate: assigned manager is INACTIVE. Use updateUserManager to reassign.' })
+       }
+       if (managerStatus === STATUS.PENDING) {
+         return res.status(400).json({ error: 'Cannot activate: assigned manager is still PENDING. Manager must be ACTIVE first.' })
+       }
+     }
 
     // Step 8 — roles[]
     const roles = user.roles || []

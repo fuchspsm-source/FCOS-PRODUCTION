@@ -24,6 +24,10 @@
 
     { type: 'section', label: 'PSM', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES'] },
     { label: 'Price Special Management', href: '/psm/list.html',                      roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES'] },
+
+    { type: 'section', label: 'PURCHASE ORDER', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
+    { label: 'PO Dashboard',           href: '/po/dashboard.html',                    roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
+    { label: 'Customer Invitations',   href: '/po/invitations.html',                  roles: ['SUPER_ADMIN', 'ADMIN'] },
   ]
 
   function escHtml(s) {

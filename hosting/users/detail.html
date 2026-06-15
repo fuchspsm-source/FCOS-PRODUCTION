@@ -57,6 +57,21 @@
           <div style="margin-top:16px;" id="role-action-area"></div>
         </div>
 
+        <div class="card" style="max-width:600px;" id="card-authority-rank">
+          <div class="card__title">Authority Rank</div>
+          <div style="margin-bottom:12px;">
+            <select class="form-input" id="select-authority-rank" style="max-width:300px;">
+              <option value="">— Tidak ada —</option>
+              <option value="Area Manager">Area Manager</option>
+              <option value="Sales Manager">Sales Manager</option>
+              <option value="Division Manager">Division Manager</option>
+              <option value="Sales Director">Sales Director</option>
+              <option value="Managing Director">Managing Director</option>
+            </select>
+          </div>
+          <div id="authority-rank-error" class="alert alert--error hidden" style="margin-bottom:12px;"></div>
+          <button class="btn btn--primary btn--sm" id="btn-save-rank">Simpan Authority Rank</button>
+        </div>
         <div class="card" style="max-width:600px;" id="card-status">
           <div class="card__title">Status Akun</div>
           <p class="text-muted text-small" style="margin-bottom:16px;"
@@ -113,6 +128,7 @@
       document.getElementById('main-content').classList.remove('hidden')
       renderUserInfo()
       renderRoleCard()
+      renderAuthorityRankCard()
       renderStatusCard()
     } catch (err) {
       document.getElementById('loading').textContent = 'Gagal memuat user: ' + err.message
@@ -145,6 +161,36 @@
       '<dt>Disetujui Oleh</dt>' + '<dd>' + approvedByDisplay                    + '</dd>'
   }
 
+  function renderAuthorityRankCard() {
+    var isSuperAdmin = FCOS.hasRole('SUPER_ADMIN')
+    var card = document.getElementById('card-authority-rank')
+    if (!card) return
+    if (!isSuperAdmin) { card.style.display = 'none'; return }
+    var sel = document.getElementById('select-authority-rank')
+    sel.value = targetUser.authority_rank || ''
+    document.getElementById('btn-save-rank').onclick = async function() {
+      var btn  = this
+      var rank = sel.value
+      var err  = document.getElementById('authority-rank-error')
+      err.classList.add('hidden')
+      FCOS.setLoading(btn, 'Menyimpan...')
+      try {
+        await FCOS.api('updateUserAuthorityRank', 'POST', {
+          uid            : targetUser.uid,
+          authority_rank : rank || null
+        })
+        targetUser.authority_rank = rank || null
+        err.classList.add('hidden')
+        alert('Authority Rank berhasil disimpan.')
+      } catch(e) {
+        err.textContent = e.message
+        err.classList.remove('hidden')
+      } finally {
+        FCOS.clearLoading(btn)
+      }
+    }
+  }
+
   function renderRoleCard() {
     var isSuperAdmin = FCOS.hasRole('SUPER_ADMIN')
     var container    = document.getElementById('role-checkboxes')
@@ -175,7 +221,9 @@
 
     if (targetUser.status === 'PENDING') {
       actionArea.innerHTML =
+        '<button class="btn btn--primary" style="margin-right:8px;" id="btn-save-roles-pending">Simpan Role</button>' +
         '<button class="btn btn--success" id="btn-approve">Approve &amp; Aktifkan</button>'
+      document.getElementById('btn-save-roles-pending').addEventListener('click', handleUpdateRoles)
       document.getElementById('btn-approve').addEventListener('click', handleApprove)
     } else if (targetUser.status === 'ACTIVE' || targetUser.status === 'INACTIVE') {
       actionArea.innerHTML =
@@ -268,7 +316,7 @@
       targetUser.approved_by = sessionUser.uid
       targetUser.approved_at = { _seconds: Math.floor(Date.now() / 1000) }
       showGlobalMsg('success', 'User berhasil disetujui dan diaktifkan.')
-      renderUserInfo(); renderRoleCard(); renderStatusCard()
+      renderUserInfo(); renderRoleCard(); renderAuthorityRankCard(); renderStatusCard()
     } catch (err) {
       showGlobalMsg('error', 'Gagal approve: ' + err.message)
       FCOS.clearLoading(btn, 'Approve & Aktifkan')
@@ -282,7 +330,7 @@
       showRoleValidationError('Pilih minimal 1 role.')
       return
     }
-    var btn = document.getElementById('btn-update-roles')
+    var btn = document.getElementById('btn-update-roles') || document.getElementById('btn-save-roles-pending')
     FCOS.setLoading(btn, 'Menyimpan...')
     try {
       await FCOS.api('updateUserRoles', 'POST', { uid: targetUid, roles: roles })
@@ -318,7 +366,7 @@
       await FCOS.api('reactivateUser', 'POST', { uid: targetUid })
       targetUser.status = 'ACTIVE'
       showGlobalMsg('success', 'Akun berhasil diaktifkan kembali.')
-      renderUserInfo(); renderRoleCard(); renderStatusCard()
+      renderUserInfo(); renderRoleCard(); renderAuthorityRankCard(); renderStatusCard()
     } catch (err) {
       showGlobalMsg('error', 'Gagal reactivate: ' + err.message)
       FCOS.clearLoading(btn, 'Reactivate User')
