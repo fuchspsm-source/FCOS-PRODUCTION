@@ -333,7 +333,13 @@ function onShipToChange() {
   checkSaveReady()
 }
 
-// ── Product Search ─────────────────────────────────────────
+// ── Product Search ─────────────────────────────────────────────────────────
+async function ensureProductsLoaded() {
+  if (window._allProducts) return
+  var data = await PORTAL.api('portalListAllProducts', 'GET')
+  window._allProducts = data.products || []
+}
+
 function onProductSearch(q) {
   clearTimeout(searchTimeout)
   if (q.length < 2) { hideAutocomplete(); return }
@@ -342,8 +348,14 @@ function onProductSearch(q) {
 
 async function doSearch(q) {
   try {
-    var result = await PORTAL.api('portalSearchProducts', 'GET', null, { q: q, limit: 10 })
-    renderAutocomplete(result.products || [])
+    await ensureProductsLoaded()
+    var qLower = q.toLowerCase()
+    var products = window._allProducts.filter(function(p) {
+      var code = (p.product_code || '').toLowerCase()
+      var name = (p.product_name || '').toLowerCase()
+      return code.includes(qLower) || name.includes(qLower)
+    }).slice(0, 20)
+    renderAutocomplete(products)
   } catch(e) { hideAutocomplete() }
 }
 

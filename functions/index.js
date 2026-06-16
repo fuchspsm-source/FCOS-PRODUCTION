@@ -27,7 +27,8 @@ exports.updateSalesBudget = salesBudget.updateSalesBudget
 exports.importSalesBudget = salesBudget.importSalesBudget
 
 const products   = require('./products')
-exports.fcos_searchProducts = products.searchProducts
+exports.fcos_searchProducts  = products.searchProducts
+exports.fcos_listAllProducts = products.listAllProducts
 const hierarchy  = require('./hierarchy')
 const importEng  = require('./import')
 const customers  = require('./customers')
@@ -196,7 +197,8 @@ exports.portalWhoAmI = require('./portal/portalWhoAmI').portalWhoAmI
 exports.portalBootstrap = require('./portal/portalBootstrap').portalBootstrap
 
 // PO-FE-5: Portal Product Search
-exports.portalSearchProducts = require('./portal/portalSearchProducts').portalSearchProducts
+exports.portalSearchProducts  = require('./portal/portalSearchProducts').portalSearchProducts
+exports.portalListAllProducts = require('./portal/portalListAllProducts').portalListAllProducts
 
 // PO-FE-6: Portal Price Resolver
 exports.portalResolvePrice = require('./portal/portalResolvePrice').portalResolvePrice
