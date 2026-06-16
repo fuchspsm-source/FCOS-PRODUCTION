@@ -526,7 +526,7 @@ document.getElementById('input-product-search').addEventListener('input', functi
 
 async function ensureProductsLoaded() {
   if (window._allProducts) return
-  var data = await FCOS.api('fcos_searchProducts', 'GET', null, { q: 'a', limit: 2000 })
+  var data = await FCOS.api('fcos_searchProducts', 'GET', null, { q: 'aa', limit: 2000 })
   window._allProducts = data.products || []
 }
 
