@@ -122,7 +122,7 @@ function renderPsmTable(items) {
       '<td class="text-small">' + escHtml(p.psm_number || '—') + '</td>' +
       '<td>' + escHtml(p.customer_name || '—') + '</td>' +
       '<td>' + psmBadge(p.status) + '</td>' +
-      '<td class="text-small">' + escHtml(p.created_by || '—') + '</td>' +
+      '<td class="text-small">' + escHtml(p.created_by_name || p.created_by || '—') + '</td>' +
       '<td class="text-small">' + fmtDate(p.created_at) + '</td>' +
       '<td><a class="btn btn--secondary btn--sm" href="/psm/detail.html?psm_id=' + encodeURIComponent(p.psm_id) + '">View</a></td>' +
     '</tr>'
