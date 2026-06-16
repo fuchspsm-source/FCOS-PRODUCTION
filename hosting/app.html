@@ -46,8 +46,7 @@
 
 <script>
   FCOS.initPage().then(function (user) {
-    document.getElementById('welcome-msg').textContent =
-      'Selamat datang, ' + user.name + '. Dashboard sedang dalam pengembangan.'
+    window.location.href = '/dashboard.html'
   })
 
   document.getElementById('btn-logout').addEventListener('click', function () {
