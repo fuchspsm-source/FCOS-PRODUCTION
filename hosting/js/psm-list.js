@@ -30,7 +30,7 @@ function psmStatusBadge(status) {
 
 // ─── Init ────────────────────────────────────────────────
 FCOS.initPage().then(function (user) {
-  FCOS_buildNav(user)
+  FCOS_SIDEBAR.build(user)
   document.getElementById('topbar-name').textContent  = user.name
   document.getElementById('sidebar-footer').innerHTML =
     '<div>' + escHtml(user.name) + '</div>' +
