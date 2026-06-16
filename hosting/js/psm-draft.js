@@ -52,16 +52,19 @@ FCOS.initPage().then(function (user) {
   loadCustomers()
 })
 
-// ─── Load customer list ──────────────────────────────────
+// ─── Load customer list (with cache) ────────────────────
 async function loadCustomers() {
   var select = document.getElementById('input-customer')
   try {
-    var result = await FCOS.api('listCustomers', 'GET')
-    var customers = (result.customers || []).filter(function (c) {
-      return c.active === true
-    }).sort(function (a, b) {
-      return (a.customerName || '').localeCompare(b.customerName || '', 'id', { sensitivity: 'base' })
-    })
+    if (!window._customersCache) {
+      var result = await FCOS.api('listCustomers', 'GET')
+      window._customersCache = (result.customers || []).filter(function (c) {
+        return c.active === true
+      }).sort(function (a, b) {
+        return (a.customerName || '').localeCompare(b.customerName || '', 'id', { sensitivity: 'base' })
+      })
+    }
+    var customers = window._customersCache
 
     if (customers.length === 0) {
       select.innerHTML = '<option value="">Tidak ada customer aktif</option>'

@@ -524,30 +524,37 @@ document.getElementById('input-product-search').addEventListener('input', functi
   }, 300)
 })
 
+async function ensureProductsLoaded() {
+  if (window._allProducts) return
+  var data = await FCOS.api('fcos_searchProducts', 'GET', null, { q: 'a', limit: 2000 })
+  window._allProducts = data.products || []
+}
+
 async function doProductSearch(q) {
   var resultsEl = document.getElementById('product-search-results')
   try {
-    var data = await FCOS.api('fcos_searchProducts', 'GET', null, { q: q, limit: 50 })
-    var products = data.products || []
+    await ensureProductsLoaded()
+    var qLower = q.toLowerCase()
+    var products = window._allProducts.filter(function (p) {
+      var code = (p.product_code || '').toLowerCase()
+      var name = (p.product_name || p.display_name || '').toLowerCase()
+      return code.includes(qLower) || name.includes(qLower)
+    }).slice(0, 50)
 
     if (products.length === 0) {
       resultsEl.innerHTML = '<div style="padding:8px 12px; color:#6b7280; font-size:13px;">Tidak ada produk ditemukan.</div>'
       resultsEl.classList.remove('hidden')
       return
     }
-
     resultsEl.innerHTML = products.map(function (p, idx) {
       return '<div class="product-search-item" data-idx="' + idx + '" ' +
         'style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #f3f4f6;">' +
-        '<div style="font-weight:500;">' + escHtml(p.product_code || '—') + ' — ' + escHtml(p.product_name || p.display_name || '—') + '</div>' +
+        '<div style="font-weight:500;">' + escHtml(p.product_code || '\u2014') + ' \u2014 ' + escHtml(p.product_name || p.display_name || '\u2014') + '</div>' +
         '<div class="text-small text-muted">DBP: ' + formatNumberOrDash(p.dbp) + ' | Cost: ' + formatNumberOrDash(p.cost) + '</div>' +
         '</div>'
     }).join('')
     resultsEl.classList.remove('hidden')
-
-    // store products for selection lookup
     window._psmSearchResults = products
-
     resultsEl.querySelectorAll('.product-search-item').forEach(function (el) {
       el.addEventListener('click', function () {
         var idx = parseInt(this.dataset.idx, 10)
