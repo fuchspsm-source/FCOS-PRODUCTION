@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — New PSM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">Fuchs Lubricants Indonesia - OSS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">New PSM</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title">New PSM</div>
+            <a href="/psm/list.html" class="text-muted text-small">
+              <- Kembali ke daftar
+            </a>
+          </div>
+        </div>
+
+        <div id="alert-msg" class="alert" style="max-width:600px;"></div>
+
+        <!-- Step 1: Customer → Create Draft -->
+        <div class="card" style="max-width:600px;" id="card-step1">
+          <div class="card__title">Step 1 — Pilih Customer</div>
+          <div class="form-group">
+            <label class="form-label">Customer <span style="color:#dc2626">*</span></label>
+            <select id="input-customer" class="form-control">
+              <option value="">Memuat customer...</option>
+            </select>
+          </div>
+          <div style="margin-top:16px;">
+            <button class="btn btn--primary" id="btn-create-draft">Create Draft</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Header fields → Save Header -->
+        <div class="card hidden" style="max-width:600px;" id="card-step2">
+          <div class="card__title">Step 2 — Header PSM</div>
+          <dl class="detail-grid" id="draft-info"></dl>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label">Validity To <span style="color:#dc2626">*</span></label>
+            <input type="date" id="input-validity-to" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="input-accrual-enabled">
+              Accrual Enabled
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Accrual Percent <span style="color:#dc2626">*</span></label>
+            <input type="number" id="input-accrual-percent" class="form-control" min="0" max="100" step="0.01">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Alasan Pengajuan PSM <span style="color:#dc2626">*</span></label>
+            <textarea id="input-business-justification" class="form-control" rows="3"
+                      placeholder="Contoh: Tender project, fleet maintenance 2026"></textarea>
+          </div>
+
+          <div style="margin-top:16px;">
+            <button class="btn btn--primary" id="btn-save-header">Save &amp; Continue</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/psm-draft.js"></script>
+
+</body>
+</html>

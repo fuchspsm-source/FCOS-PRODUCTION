@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCOS — Detail PSM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar__logo">Fuchs Lubricants Indonesia - OSS</div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__footer" id="sidebar-footer"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar__title">Detail PSM</div>
+      <div class="topbar__user">
+        <span id="topbar-name"></span>
+        <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div id="loading" class="text-muted">Memuat...</div>
+      <div id="main-content" class="hidden">
+
+        <div class="page-header">
+          <div>
+            <div class="page-header__title" id="page-title">Detail PSM</div>
+            <a href="/psm/list.html" class="text-muted text-small">
+              <- Kembali ke daftar
+            </a>
+          </div>
+          <div>
+            <button class="btn btn--secondary" id="btn-download-pdf">Download PDF</button>
+            <button class="btn btn--primary hidden" id="btn-submit-psm">Submit PSM</button>
+          </div>
+        </div>
+
+        <div id="submit-psm-error" class="alert alert--error hidden" style="max-width:800px;"></div>
+
+        <div id="alert-msg" class="alert" style="max-width:800px;"></div>
+
+        <!-- Section 1: PSM Header -->
+        <div class="card" style="max-width:800px;">
+          <div class="card__title">Informasi PSM</div>
+          <dl class="detail-grid" id="psm-info"></dl>
+        </div>
+
+        <!-- Section 1B: Business Justification (PSM-BIZ-1) -->
+        <div class="card" style="max-width:800px;">
+          <div class="card__title">ALASAN PENGAJUAN PSM</div>
+          <div id="business-justification-content" style="white-space:pre-wrap; font-size:14px; line-height:1.5;"></div>
+        </div>
+
+        <!-- Section 2: Commercial Summary -->
+        <div class="card" style="max-width:800px;">
+          <div class="card__title">Ringkasan Komersial</div>
+          <dl class="detail-grid" id="commercial-info"></dl>
+        </div>
+
+        <!-- Section 3: Item List -->
+        <div class="card" style="max-width:1100px;">
+          <div class="card__title">Daftar Item</div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Product Code</th>
+                  <th>Product Name</th>
+                  <th>Qty</th>
+                  <th>DBP</th>
+                  <th>Cost</th>
+                  <th>Proposed Price</th>
+                  <th>Discount %</th>
+                  <th>Sales Value</th>
+                  <th>Cost Value</th>
+                  <th>Margin</th>
+                  <th>NC %</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="items-body">
+                <tr><td colspan="12" class="table-empty">Memuat...</td></tr>
+              </tbody>
+              <tfoot id="items-footer"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 3B: Add Item (conditional, can_edit only) -->
+        <div class="card hidden" style="max-width:1100px;" id="card-add-item">
+          <div class="card__title">Tambah Item</div>
+
+          <div id="add-item-error" class="alert alert--error hidden" style="margin-bottom:12px;"></div>
+
+          <div class="form-group" style="position:relative;">
+            <label class="form-label">Search Product <span style="color:#dc2626">*</span></label>
+            <input type="text" id="input-product-search" class="form-control"
+                   placeholder="Ketik minimal 2 karakter (kode atau nama produk)" autocomplete="off">
+            <div id="product-search-results" class="hidden"
+                 style="position:absolute; z-index:10; background:#fff; border:1px solid #e5e7eb; border-radius:6px; max-height:240px; overflow-y:auto; width:100%; box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
+          </div>
+
+          <div id="selected-product-info" class="hidden" style="margin:12px 0;">
+            <dl class="detail-grid" id="selected-product-detail"></dl>
+          </div>
+
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0; max-width:120px;">
+              <label class="form-label">Qty <span style="color:#dc2626">*</span></label>
+              <input type="number" id="input-item-qty" class="form-control" min="1" step="1" value="1">
+            </div>
+            <div class="form-group" style="margin-bottom:0; max-width:180px;">
+              <label class="form-label">Proposed Price <span style="color:#dc2626">*</span></label>
+              <input type="number" id="input-item-price" class="form-control" min="0" step="0.01">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <button class="btn btn--primary" id="btn-add-item">Add Item</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Approval Summary -->
+        <div class="card" style="max-width:800px;">
+          <div class="card__title">Ringkasan Persetujuan</div>
+          <dl class="detail-grid" id="approval-info"></dl>
+        </div>
+
+        <!-- Section 4B: Approval Action (PSM-UI-3B, conditional, can_approve only) -->
+        <div class="card hidden" style="max-width:800px;" id="card-approval-action">
+          <div class="card__title">Approval Action</div>
+
+          <div id="approval-action-error" class="alert alert--error hidden" style="margin-bottom:12px;"></div>
+
+          <div class="form-group">
+            <label class="form-label">Comment</label>
+            <textarea id="input-approval-comment" class="form-control" rows="3"></textarea>
+          </div>
+
+          <div style="display:flex; gap:12px;">
+            <button class="btn btn--primary" id="btn-approve-psm">Approve</button>
+            <button class="btn btn--secondary" id="btn-reject-psm">Reject</button>
+          </div>
+        </div>
+
+        <!-- Section 5: Approval History -->
+        <div class="card" style="max-width:1100px;">
+          <div class="card__title">Riwayat Persetujuan</div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Actor</th>
+                  <th>Comment</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="history-body">
+                <tr><td colspan="4" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 6: Caller Context -->
+        <div class="card" style="max-width:800px;">
+          <div class="card__title">Konteks Pengguna</div>
+          <dl class="detail-grid" id="caller-info"></dl>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/firebase-init.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/psm-detail.js"></script>
+
+</body>
+</html>
