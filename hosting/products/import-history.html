@@ -103,6 +103,7 @@
   }
 
   FCOS.initPage().then(function (user) {
+  FCOS_SIDEBAR.build(user)
     FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')
     document.getElementById('topbar-name').textContent  = user.name
     document.getElementById('sidebar-footer').innerHTML =

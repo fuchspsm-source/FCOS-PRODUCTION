@@ -241,6 +241,7 @@ var currentTab   = 'registry';
 var editingId    = null;
 
 FCOS.initPage().then(function(user) {
+  FCOS_SIDEBAR.build(user)
   isSuperAdmin = (user.roles || []).includes('SUPER_ADMIN')
   isCreateRole = isSuperAdmin || (user.roles || []).includes('COMMERCIAL_ADMIN')
   document.getElementById('topbar-name').textContent  = user.name

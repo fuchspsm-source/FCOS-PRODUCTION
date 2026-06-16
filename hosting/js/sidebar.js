@@ -50,6 +50,7 @@
     var current   = window.location.pathname
 
     nav.innerHTML = ''
+    nav.style.opacity = '0'
 
     NAV.forEach(function (item) {
       var allowed = !item.roles || item.roles.some(function (r) { return userRoles.includes(r) })
@@ -71,6 +72,8 @@
       }
       nav.appendChild(a)
     })
+
+    nav.style.opacity = '1'
 
     var footer = document.getElementById('sidebar-footer')
     if (footer) {

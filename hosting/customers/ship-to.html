@@ -265,6 +265,7 @@ var shipImportJobId = null
 // INIT
 // ============================================================
 FCOS.initPage().then(function (user) {
+  FCOS_SIDEBAR.build(user)
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
 
   document.getElementById('topbar-name').textContent  = user.name

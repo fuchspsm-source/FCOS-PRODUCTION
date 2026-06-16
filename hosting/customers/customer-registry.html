@@ -276,6 +276,7 @@ var custImportRows = []
 var custImportJobId = null
 
 FCOS.initPage().then(function (user) {
+  FCOS_SIDEBAR.build(user)
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
   isSuperAdmin = (user.roles || []).includes('SUPER_ADMIN')
   document.getElementById('topbar-name').textContent  = user.name
