@@ -2,6 +2,8 @@
   'use strict'
 
   var NAV = [
+    { label: 'Dashboard', href: '/dashboard.html', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING', 'SALES'] },
+
     { type: 'section', label: 'ADMINISTRASI', roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'User Registry',          href: '/users/list.html',                      roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'Organization Hierarchy', href: '/organization/list.html',               roles: ['SUPER_ADMIN'] },
