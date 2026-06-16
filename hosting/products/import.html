@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FLI-OSS — Import Products</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/main.css">
   <style>
     .step-bar { display:flex; gap:0; margin-bottom:28px; }
@@ -89,6 +92,21 @@
           <div class="step"        id="step-3">3. Commit</div>
         </div>
 
+        <!-- Panduan Import Product -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card__title">Panduan Import Product</div>
+          <div style="font-size:0.88rem; line-height:1.9; color:#475569;">
+            <strong style="color:#1a1a2e;">Kolom wajib:</strong> ProductCode &nbsp;|&nbsp; ProductName<br>
+            <strong style="color:#1a1a2e;">Kolom opsional:</strong> SKU, DBP, Cost, Brand, Families, Master SKU<br>
+            <strong style="color:#1a1a2e;">Hierarchy:</strong> Brand, Families, dan Master SKU akan otomatis dibuat jika belum ada, dan produk akan ter-link ke Product Hierarchy &amp; Product Families.<br>
+            <strong style="color:#1a1a2e;">Duplikat:</strong> ProductCode yang sudah ada akan ditandai CONFLICT.<br>
+            <strong style="color:#1a1a2e;">Format:</strong> File CSV, XLS, atau XLSX, maksimum 50.000 baris.
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn--secondary btn--sm" onclick="downloadProductTemplate()">Download Template</button>
+          </div>
+        </div>
+
         <!-- ── STEP 1: Upload ─────────────────────────────── -->
         <div id="panel-upload">
           <div class="drop-zone" id="drop-zone">
@@ -163,8 +181,10 @@
               <button class="filter-tab" data-vs="ERROR">Error</button>
             </div>
             <div id="unresolved-warn" class="hidden"
-                 style="font-size:.82rem; color:#d97706; font-weight:600;">
-              ⚠️ <span id="unresolved-count">0</span> conflict belum ada decision
+                 style="font-size:.82rem; color:#d97706; font-weight:600; display:flex; align-items:center; gap:12px;">
+              <span>⚠️ <span id="unresolved-count">0</span> conflict belum ada decision</span>
+              <button class="btn btn--secondary btn--sm" onclick="bulkSetDecision('UPDATE')">Update Semua Conflict</button>
+              <button class="btn btn--secondary btn--sm" onclick="bulkSetDecision('SKIP')">Skip Semua Conflict</button>
             </div>
           </div>
 
@@ -236,7 +256,7 @@ var PAGE_SIZE      = 50
 
 // ─── Init ─────────────────────────────────────────────────
 FCOS.initPage().then(function (user) {
-  FCOS_SIDEBAR.build(user)
+    FCOS_SIDEBAR.build(user)
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN')
   document.getElementById('topbar-name').textContent  = user.name
   document.getElementById('sidebar-footer').innerHTML =
@@ -287,7 +307,7 @@ function handleFile(file) {
       if (rows.length === 0) { showUploadError('File kosong atau tidak ada data yang bisa dibaca.'); return }
       if (rows.length > 50000) { showUploadError('File terlalu besar. Maks 50.000 baris.'); return }
       setProgress(60, 'Mengirim ke server (' + rows.length + ' baris)...')
-      startImport(file.name, fileType, rows)
+      startImport(file.name, 'PRODUCT', rows)
     } catch (err) {
       showUploadError('Gagal parse file: ' + err.message)
     }
@@ -315,9 +335,14 @@ function parseFile(data, fileType, fileName) {
   var aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
 
   // Known column name candidates (lowercase for comparison)
-  var CODE_CANDIDATES = ['product_code','productcode','product code','code','kode','kode produk','material code','material_code','mat code','mat_code','prod. code','prod.code','prodcode']
-  var NAME_CANDIDATES = ['product_name','productname','product name','name','nama','nama produk','description','desc','prod. name','prod.name','prodname']
-  var SKU_CANDIDATES  = ['sku']
+  var CODE_CANDIDATES       = ['product_code','productcode','product code','code','kode','kode produk','material code','material_code','mat code','mat_code','prod. code','prod.code','prodcode']
+  var NAME_CANDIDATES       = ['product_name','productname','product name','name','nama','nama produk','description','desc','prod. name','prod.name','prodname']
+  var SKU_CANDIDATES        = ['sku']
+  var DBP_CANDIDATES        = ['dbp']
+  var COST_CANDIDATES       = ['cost']
+  var BRAND_CANDIDATES      = ['brand']
+  var FAMILY_CANDIDATES     = ['families','family']
+  var MASTER_SKU_CANDIDATES = ['master sku','master_sku','mastersku']
 
   // Find header row: first row where any cell matches a known candidate
   var headerRowIdx = -1
@@ -340,12 +365,17 @@ function parseFile(data, fileType, fileName) {
   }
 
   // Map header names to column indices
-  var codeIdx = -1, nameIdx = -1, skuIdx = -1
+  var codeIdx = -1, nameIdx = -1, skuIdx = -1, dbpIdx = -1, costIdx = -1, brandIdx = -1, familyIdx = -1, masterSkuIdx = -1
   headerRow.forEach(function (cell, i) {
     var lower = String(cell || '').toLowerCase().trim()
-    if (CODE_CANDIDATES.indexOf(lower) !== -1 && codeIdx === -1) codeIdx = i
-    if (NAME_CANDIDATES.indexOf(lower) !== -1 && nameIdx === -1) nameIdx = i
-    if (SKU_CANDIDATES.indexOf(lower)  !== -1 && skuIdx  === -1) skuIdx  = i
+    if (CODE_CANDIDATES.indexOf(lower)       !== -1 && codeIdx      === -1) codeIdx      = i
+    if (NAME_CANDIDATES.indexOf(lower)       !== -1 && nameIdx      === -1) nameIdx      = i
+    if (SKU_CANDIDATES.indexOf(lower)        !== -1 && skuIdx       === -1) skuIdx       = i
+    if (DBP_CANDIDATES.indexOf(lower)        !== -1 && dbpIdx       === -1) dbpIdx       = i
+    if (COST_CANDIDATES.indexOf(lower)       !== -1 && costIdx      === -1) costIdx      = i
+    if (BRAND_CANDIDATES.indexOf(lower)      !== -1 && brandIdx     === -1) brandIdx     = i
+    if (FAMILY_CANDIDATES.indexOf(lower)     !== -1 && familyIdx    === -1) familyIdx    = i
+    if (MASTER_SKU_CANDIDATES.indexOf(lower) !== -1 && masterSkuIdx === -1) masterSkuIdx = i
   })
 
   // Parse data rows after header
@@ -356,15 +386,25 @@ function parseFile(data, fileType, fileName) {
     var isEmpty = dataRow.every(function (cell) { return String(cell || '').trim() === '' })
     if (isEmpty) continue
 
-    var product_code = codeIdx !== -1 ? String(dataRow[codeIdx] || '').trim() : ''
-    var product_name = nameIdx !== -1 ? String(dataRow[nameIdx] || '').trim() : ''
-    var sku          = skuIdx  !== -1 ? String(dataRow[skuIdx]  || '').trim() : ''
+    var product_code = codeIdx      !== -1 ? String(dataRow[codeIdx]      || '').trim() : ''
+    var product_name = nameIdx      !== -1 ? String(dataRow[nameIdx]      || '').trim() : ''
+    var sku          = skuIdx       !== -1 ? String(dataRow[skuIdx]       || '').trim() : ''
+    var dbp          = dbpIdx       !== -1 ? String(dataRow[dbpIdx]       || '').trim() : ''
+    var cost         = costIdx      !== -1 ? String(dataRow[costIdx]      || '').trim() : ''
+    var brand        = brandIdx     !== -1 ? String(dataRow[brandIdx]     || '').trim() : ''
+    var family       = familyIdx    !== -1 ? String(dataRow[familyIdx]    || '').trim() : ''
+    var master_sku   = masterSkuIdx !== -1 ? String(dataRow[masterSkuIdx] || '').trim() : ''
 
     result.push({
       row_number   : d + 1,  // 1-indexed (Excel row number)
       product_code : product_code,
       product_name : product_name,
       sku          : sku,
+      dbp          : dbp,
+      cost         : cost,
+      brand        : brand,
+      family       : family,
+      master_sku   : master_sku,
       raw_row      : dataRow
     })
   }
@@ -387,7 +427,7 @@ async function startImport(fileName, fileType, rows) {
     // 1. Create job
     var jobRes = await FCOS.api('createImportJob', 'POST', {
       file_name  : fileName,
-      file_type  : 'PRODUCT',
+      file_type  : fileType,
       total_rows : rows.length
     })
     currentJobId = jobRes.job_id
@@ -546,6 +586,23 @@ async function setDecision(staging_id, decision) {
     alert('Gagal set decision: ' + err.message)
   }
 }
+async function bulkSetDecision(decision) {
+  var label = decision === 'UPDATE' ? 'UPDATE (timpa data lama)' : 'SKIP (lewati, tidak diubah)'
+  if (!confirm('Set semua baris CONFLICT menjadi ' + label + '?')) return
+  try {
+    var res = await FCOS.api('setRowDecisionBulk', 'POST', { job_id: currentJobId, decision: decision })
+    allRows.forEach(function (r) {
+      if (r.validation_status === 'CONFLICT' && r.commit_status !== 'COMMITTED') {
+        r.user_decision = decision
+      }
+    })
+    updateSummary()
+    renderPreviewTable()
+    alert((res.updated || 0) + ' baris di-set ke ' + label)
+  } catch (err) {
+    alert('Gagal bulk set decision: ' + err.message)
+  }
+}
 
 // ─── Filter tabs ──────────────────────────────────────────
 document.getElementById('filter-vstatus').addEventListener('click', function (e) {
@@ -642,6 +699,16 @@ function showUploadStatus(name) {
   document.getElementById('upload-status').classList.remove('hidden')
 }
 
+function downloadProductTemplate() {
+  var rows = [
+    { ProductCode: 'P000001', ProductName: 'Contoh Product A', SKU: '', DBP: '', Cost: '', Brand: 'FUCHS', Families: 'HYDRAULIC', 'Master SKU': 'RENOLIN' },
+    { ProductCode: 'P000002', ProductName: 'Contoh Product B', SKU: '', DBP: '', Cost: '', Brand: 'FUCHS', Families: 'GEAR OIL', 'Master SKU': 'TITAN' }
+  ]
+  var ws = XLSX.utils.json_to_sheet(rows)
+  var wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Products')
+  XLSX.writeFile(wb, 'Product_Import_Template.xlsx')
+}
 function setProgress(pct, label) {
   document.getElementById('progress-fill').style.width  = pct + '%'
   document.getElementById('progress-label').textContent = label
