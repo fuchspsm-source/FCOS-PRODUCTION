@@ -24,8 +24,9 @@ function toISO(ts) {
   return String(ts)
 }
 
-function buildItem(doc) {
+function buildItem(doc, userMap) {
   const d = doc.data()
+  const createdByUid = d.created_by ?? null
   return {
     psm_id:              doc.id,
     psm_number:          d.psm_number          ?? null,
@@ -36,10 +37,27 @@ function buildItem(doc) {
     aggregate_nc:        d.aggregate_nc         ?? null,
     status:              d.status               ?? null,
     approval_request_id: d.approval_request_id  ?? null,
-    created_by:          d.created_by           ?? null,
+    created_by:          createdByUid,
+    created_by_name:     (userMap && userMap[createdByUid]) ? userMap[createdByUid] : createdByUid,
     created_at:          toISO(d.created_at),
     updated_at:          toISO(d.updated_at)
   }
+}
+
+async function buildUserMap(docs) {
+  const uids = [...new Set(docs.map(d => d.data().created_by).filter(Boolean))]
+  if (uids.length === 0) return {}
+  const userMap = {}
+  const chunks = []
+  for (let i = 0; i < uids.length; i += 10) chunks.push(uids.slice(i, i + 10))
+  for (const chunk of chunks) {
+    const snaps = await db.collection('users')
+      .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
+      .select('name')
+      .get()
+    snaps.docs.forEach(d => { userMap[d.id] = d.data().name || d.id })
+  }
+  return userMap
 }
 
 exports.listMyPsms = onRequest({ region: REGION }, run(
@@ -122,7 +140,8 @@ exports.listMyPsms = onRequest({ region: REGION }, run(
         const toProcess = hasMore ? docs.slice(0, pageSize) : docs
         const lastDoc = toProcess.length > 0 ? toProcess[toProcess.length - 1] : null
         cursor = (hasMore && lastDoc) ? toISO(lastDoc.data().created_at) : null
-        items = toProcess.map(buildItem)
+        const userMapAdmin = await buildUserMap(toProcess)
+        items = toProcess.map(d => buildItem(d, userMapAdmin))
       } else {
         if (psmIds.length === 0) {
           return res.status(200).json({ items: [], cursor: null, has_more: false, total_in_page: 0 })
@@ -159,7 +178,8 @@ exports.listMyPsms = onRequest({ region: REGION }, run(
         const toProcess = hasMore ? page.slice(0, pageSize) : page
         const lastDoc = toProcess.length > 0 ? toProcess[toProcess.length - 1] : null
         cursor = (hasMore && lastDoc) ? toISO(lastDoc.data().created_at) : null
-        items = toProcess.map(buildItem)
+        const userMapNonAdmin = await buildUserMap(toProcess)
+        items = toProcess.map(d => buildItem(d, userMapNonAdmin))
       }
 
       return res.status(200).json({ items, cursor, has_more: hasMore, total_in_page: items.length })
