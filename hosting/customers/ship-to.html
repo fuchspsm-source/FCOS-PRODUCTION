@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FLI-OSS — Customer Ship-To</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
@@ -70,6 +73,7 @@
                 <th>Ship-To Code</th>
                 <th>Ship-To Name</th>
                 <th>Sold-To</th>
+                <th>Address</th>
                 <th>City</th>
                 <th>Province</th>
                 <th>Island</th>
@@ -265,7 +269,7 @@ var shipImportJobId = null
 // INIT
 // ============================================================
 FCOS.initPage().then(function (user) {
-  FCOS_SIDEBAR.build(user)
+    FCOS_SIDEBAR.build(user)
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
 
   document.getElementById('topbar-name').textContent  = user.name
@@ -362,6 +366,7 @@ function renderTable() {
       '<td><strong>' + escHtml(s.shipToCode) + '</strong></td>' +
       '<td>' + escHtml(s.shipToName) + '</td>' +
       '<td class="text-small">' + soldToLabel + '</td>' +
+      '<td class="text-small">' + escHtml(s.address || '—') + '</td>' +
       '<td>' + escHtml(s.city     || '—') + '</td>' +
       '<td>' + escHtml(s.province || '—') + '</td>' +
       '<td>' + escHtml(s.island   || '—') + '</td>' +

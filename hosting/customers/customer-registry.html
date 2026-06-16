@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FLI-OSS — Customer Registry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
@@ -276,7 +279,7 @@ var custImportRows = []
 var custImportJobId = null
 
 FCOS.initPage().then(function (user) {
-  FCOS_SIDEBAR.build(user)
+    FCOS_SIDEBAR.build(user)
   FCOS.requirePageRole('SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING')
   isSuperAdmin = (user.roles || []).includes('SUPER_ADMIN')
   document.getElementById('topbar-name').textContent  = user.name
@@ -687,11 +690,15 @@ function parseCustAndPreview(raw) {
   }
   var rows = [], errors = []
   norm.forEach(function (r, i) {
-    var code = String(r['customercode'] || '').trim().toUpperCase()
-    var name = String(r['customername'] || '').trim()
+    var code     = String(r['customercode'] || '').trim().toUpperCase()
+    var name     = String(r['customername'] || '').trim()
+    var address  = String(r['address']  || '').trim()
+    var city     = String(r['city']     || '').trim()
+    var province = String(r['province'] || '').trim()
+    var island   = String(r['island']   || '').trim()
     if (!code) { errors.push('Baris ' + (i+2) + ': CustomerCode kosong'); return }
     if (!name) { errors.push('Baris ' + (i+2) + ': CustomerName kosong'); return }
-    rows.push({ customerCode: code, customerName: name })
+    rows.push({ customerCode: code, customerName: name, address: address, city: city, province: province, island: island })
   })
   if (errors.length) showCustErr(errors.slice(0,10).join('\n') + (errors.length > 10 ? '\n... dan ' + (errors.length-10) + ' lainnya' : ''))
   if (!rows.length) return
@@ -717,8 +724,9 @@ async function startCustImport() {
     })
     custImportJobId = jobRes.job_id
     var apiRows = custImportRows.map(function (r, i) {
-      return { row_number: i+1, raw_row: { customerCode: r.customerCode, customerName: r.customerName },
-               customerCode: r.customerCode, customerName: r.customerName }
+      return { row_number: i+1, raw_row: { customerCode: r.customerCode, customerName: r.customerName, address: r.address, city: r.city, province: r.province, island: r.island },
+               customerCode: r.customerCode, customerName: r.customerName,
+               address: r.address, city: r.city, province: r.province, island: r.island }
     })
     await FCOS.api('submitImportRows', 'POST', { job_id: custImportJobId, rows: apiRows })
     var valRes = await FCOS.api('validateImportJob', 'POST', { job_id: custImportJobId })
@@ -777,8 +785,8 @@ function resetCustImport() {
 
 function downloadCustomerTemplate() {
   var rows = [
-    { CustomerCode: 'C000001', CustomerName: 'Contoh Customer A' },
-    { CustomerCode: 'C000002', CustomerName: 'Contoh Customer B' }
+    { CustomerCode: 'C000001', CustomerName: 'Contoh Customer A', Address: 'Jl. Contoh No. 1', City: 'Jakarta', Province: 'DKI Jakarta', Island: 'Jawa' },
+    { CustomerCode: 'C000002', CustomerName: 'Contoh Customer B', Address: 'Jl. Contoh No. 2', City: 'Bandung', Province: 'Jawa Barat', Island: 'Jawa' }
   ]
   var ws = XLSX.utils.json_to_sheet(rows)
   var wb = XLSX.utils.book_new()
