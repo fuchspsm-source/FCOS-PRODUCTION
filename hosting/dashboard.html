@@ -7,15 +7,12 @@
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
-
 <div class="layout">
-
   <aside class="sidebar">
     <div class="sidebar__logo"><img src="/images/fuchs-logo.png" alt="FLI" style="height:36px;display:block;margin-bottom:4px"><span style="font-size:10px;color:#aaa;display:block;line-height:1.3">Fuchs Lubricants Indonesia<br>One Stop Service</span></div>
     <nav class="sidebar__nav" id="sidebar-nav"></nav>
     <div class="sidebar__footer" id="sidebar-footer"></div>
   </aside>
-
   <div class="main">
     <header class="topbar">
       <div class="topbar__title">Dashboard</div>
@@ -24,31 +21,63 @@
         <button class="btn btn--secondary btn--sm" id="btn-logout">Logout</button>
       </div>
     </header>
-
     <div class="content">
       <div id="loading" class="text-muted">Memuat...</div>
       <div id="main-content" class="hidden">
-
         <div class="page-header">
           <div>
-            <div class="page-header__title">
-              Selamat datang, <span id="welcome-name"></span>
-            </div>
+            <div class="page-header__title">Selamat datang, <span id="welcome-name"></span></div>
             <div class="page-header__subtitle">Fuchs Lubricants Indonesia — One Stop Service</div>
           </div>
         </div>
-
-        <div class="card" style="max-width: 440px; margin-top: 8px;">
+        <div class="card" style="max-width:440px; margin-top:8px;">
           <div class="card__title">Akun Kamu</div>
           <dl class="detail-grid" id="account-summary"></dl>
+        </div>
+
+        <!-- PSM Widget -->
+        <div style="margin-top:24px;">
+          <div class="page-header" style="margin-bottom:12px;">
+            <div class="page-header__title" style="font-size:1.1rem;">Price Special Management</div>
+          </div>
+          <!-- Tabs -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <button class="btn btn--secondary btn--sm psm-tab active" data-status="">Semua</button>
+            <button class="btn btn--secondary btn--sm psm-tab" data-status="DRAFT">Draft</button>
+            <button class="btn btn--secondary btn--sm psm-tab" data-status="SUBMITTED">Submitted</button>
+            <button class="btn btn--secondary btn--sm psm-tab active-default" data-status="PENDING">Pending</button>
+            <button class="btn btn--secondary btn--sm psm-tab" data-status="APPROVED">Approved</button>
+            <button class="btn btn--secondary btn--sm psm-tab" data-status="REJECTED">Rejected</button>
+          </div>
+          <div id="psm-loading" class="text-muted" style="display:none;">Memuat PSM...</div>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>PSM NUMBER</th>
+                  <th>CUSTOMER</th>
+                  <th>STATUS</th>
+                  <th>CREATED BY</th>
+                  <th>CREATED AT</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="psm-body">
+                <tr><td colspan="6" class="table-empty">Memuat...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+            <button class="btn btn--secondary btn--sm" id="psm-prev" disabled>← Prev</button>
+            <button class="btn btn--secondary btn--sm" id="psm-next" disabled>Next →</button>
+          </div>
         </div>
 
       </div>
     </div>
   </div>
-
 </div>
-
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="/js/firebase-init.js"></script>
@@ -56,42 +85,113 @@
 <script src="/js/auth.js"></script>
 <script src="/js/utils.js"></script>
 <script src="/js/sidebar.js"></script>
-
 <script>
+var PSM_STATUS_LABELS = { DRAFT:'Draft', SUBMITTED:'Submitted', PENDING:'Pending', APPROVED:'Approved', REJECTED:'Rejected' }
+var PSM_STATUS_CLASS  = { DRAFT:'badge badge--draft', SUBMITTED:'badge badge--warning', PENDING:'badge badge--warning', APPROVED:'badge badge--active', REJECTED:'badge badge--inactive' }
 
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+function fmtDate(iso) {
+  if (!iso) return '—'
+  var d = new Date(iso)
+  return d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) + ', ' +
+    d.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })
+}
+function psmBadge(status) {
+  var label = PSM_STATUS_LABELS[status] || status || '—'
+  var cls   = PSM_STATUS_CLASS[status]  || 'badge'
+  return '<span class="' + cls + '">' + label + '</span>'
+}
 
-  FCOS.initPage().then(function (user) {
-    if (!FCOS.hasRole('SUPER_ADMIN', 'ADMIN')) {
-      window.location.href = '/app.html'
-      return
-    }
+var currentStatus  = 'PENDING'
+var currentCursor  = null
+var cursorStack    = []
 
-    document.getElementById('topbar-name').textContent  = user.name
-    document.getElementById('welcome-name').textContent = user.name.split(' ')[0]
-    FCOS_SIDEBAR.build(user)
-
-    document.getElementById('account-summary').innerHTML =
-      '<dt>Nama</dt>'   + '<dd>' + escHtml(user.name)  + '</dd>' +
-      '<dt>Email</dt>'  + '<dd>' + escHtml(user.email) + '</dd>' +
-      '<dt>Role</dt>'   + '<dd>' + FCOS.formatRoles(user.roles) + '</dd>' +
-      '<dt>Status</dt>' + '<dd>' + FCOS.statusBadge(user.status) + '</dd>'
-
-
-    document.getElementById('loading').style.display = 'none'
-    document.getElementById('main-content').classList.remove('hidden')
-  })
-
-
-  document.getElementById('btn-logout').addEventListener('click', function () {
-    FCOS.logout()
-  })
-
-  function escHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+function renderPsmTable(items) {
+  var tbody = document.getElementById('psm-body')
+  if (!items || items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Tidak ada PSM.</td></tr>'
+    return
   }
-</script>
+  tbody.innerHTML = items.map(function(p) {
+    return '<tr>' +
+      '<td class="text-small">' + escHtml(p.psm_number || '—') + '</td>' +
+      '<td>' + escHtml(p.customer_name || '—') + '</td>' +
+      '<td>' + psmBadge(p.status) + '</td>' +
+      '<td class="text-small">' + escHtml(p.created_by || '—') + '</td>' +
+      '<td class="text-small">' + fmtDate(p.created_at) + '</td>' +
+      '<td><a class="btn btn--secondary btn--sm" href="/psm/detail.html?psm_id=' + encodeURIComponent(p.psm_id) + '">View</a></td>' +
+    '</tr>'
+  }).join('')
+}
 
+async function loadPsm(cursor) {
+  document.getElementById('psm-loading').style.display = 'block'
+  var params = { page_size: 10 }
+  if (currentStatus) params.status = currentStatus
+  if (cursor)        params.cursor = cursor
+  try {
+    var data = await FCOS.api('fcos_listMyPsms', 'GET', null, params)
+    renderPsmTable(data.items)
+    document.getElementById('psm-next').disabled = !data.has_more
+    currentCursor = cursor || null
+    if (data.has_more) {
+      var lastItem = data.items[data.items.length - 1]
+      document.getElementById('psm-next').dataset.cursor = lastItem.created_at
+    } else {
+      document.getElementById('psm-next').dataset.cursor = ''
+    }
+  } catch(err) {
+    document.getElementById('psm-body').innerHTML = '<tr><td colspan="6" class="table-empty">Gagal memuat: ' + escHtml(err.message) + '</td></tr>'
+  }
+  document.getElementById('psm-loading').style.display = 'none'
+}
+
+// Tab clicks
+document.querySelectorAll('.psm-tab').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.psm-tab').forEach(function(b) { b.classList.remove('active') })
+    this.classList.add('active')
+    currentStatus = this.dataset.status
+    cursorStack   = []
+    document.getElementById('psm-prev').disabled = true
+    loadPsm(null)
+  })
+})
+
+// Pagination
+document.getElementById('psm-next').addEventListener('click', function() {
+  var cursor = this.dataset.cursor
+  if (!cursor) return
+  cursorStack.push(currentCursor)
+  document.getElementById('psm-prev').disabled = false
+  loadPsm(cursor)
+})
+document.getElementById('psm-prev').addEventListener('click', function() {
+  var prev = cursorStack.pop()
+  if (cursorStack.length === 0) this.disabled = true
+  loadPsm(prev || null)
+})
+
+FCOS.initPage().then(function(user) {
+  document.getElementById('topbar-name').textContent  = user.name
+  document.getElementById('welcome-name').textContent = user.name.split(' ')[0]
+  FCOS_SIDEBAR.build(user)
+  document.getElementById('account-summary').innerHTML =
+    '<dt>Nama</dt>'   + '<dd>' + escHtml(user.name)  + '</dd>' +
+    '<dt>Email</dt>'  + '<dd>' + escHtml(user.email) + '</dd>' +
+    '<dt>Role</dt>'   + '<dd>' + FCOS.formatRoles(user.roles) + '</dd>' +
+    '<dt>Status</dt>' + '<dd>' + FCOS.statusBadge(user.status) + '</dd>'
+  document.getElementById('loading').style.display = 'none'
+  document.getElementById('main-content').classList.remove('hidden')
+  // Set default tab = PENDING
+  document.querySelectorAll('.psm-tab').forEach(function(b) { b.classList.remove('active') })
+  document.querySelector('.psm-tab[data-status="PENDING"]').classList.add('active')
+  loadPsm(null)
+})
+
+document.getElementById('btn-logout').addEventListener('click', function() { FCOS.logout() })
+</script>
 </body>
 </html>

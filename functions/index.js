@@ -160,7 +160,8 @@ exports.fcos_syncApprovalResult = require('./psmRequests').syncApprovalResult
 exports.fcos_recallPsm = require('./psmRequests').recallPsm
 
 // Package PSM-RM-1: List PSMs
-exports.fcos_listPsms = require('./psmRead').listPsms
+exports.fcos_listPsms   = require('./psmRead').listPsms
+exports.fcos_listMyPsms = require('./psmRead').listMyPsms
 
 // Package PSM-RM-2: Get PSM Detail
 exports.fcos_getPsmDetail = require('./psmRead').getPsmDetail
