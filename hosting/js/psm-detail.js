@@ -60,6 +60,7 @@ async function loadDetail() {
     renderCallerInfo(data)
     renderAddItemSection(data)
     renderSubmitButton(data)
+    renderRecallButton(data)
   } catch (err) {
     document.getElementById('loading').textContent =
       'Gagal memuat PSM: ' + err.message
@@ -764,6 +765,35 @@ function renderSubmitButton(data) {
     btn.classList.remove('hidden')
   } else {
     btn.classList.add('hidden')
+  }
+}
+
+// ─── Recall PSM (REJECTED -> DRAFT) ─────────────────────
+function renderRecallButton(data) {
+  var btn = document.getElementById('btn-recall-psm')
+  if (!btn) return
+  if (data.can_recall === true) {
+    btn.classList.remove('hidden')
+  } else {
+    btn.classList.add('hidden')
+  }
+}
+var btnRecall = document.getElementById('btn-recall-psm')
+if (btnRecall) {
+  btnRecall.addEventListener('click', function () {
+    if (!window.confirm('Recall PSM ini? Status akan kembali ke Draft dan bisa diedit ulang.')) return
+    doRecallPsm(this)
+  })
+}
+async function doRecallPsm(btn) {
+  FCOS.setLoading(btn, 'Recalling...')
+  try {
+    await FCOS.api('fcos_recallPsm', 'POST', { psm_id: psmId })
+    await loadDetail()
+  } catch (err) {
+    alert('Gagal recall PSM: ' + err.message)
+    FCOS.clearLoading(btn)
+    btn.textContent = 'Recall & Revise'
   }
 }
 
