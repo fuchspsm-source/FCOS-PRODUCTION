@@ -2,7 +2,7 @@
   'use strict'
 
   var NAV = [
-    { label: 'Dashboard', href: '/dashboard.html', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING', 'SALES'] },
+    { label: 'Dashboard', href: '/dashboard.html', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'PRICING', 'SALES', 'REGIONAL_MANAGER', 'AREA_MANAGER'] },
 
     { type: 'section', label: 'ADMINISTRASI', roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'User Registry',          href: '/users/list.html',                      roles: ['SUPER_ADMIN', 'ADMIN'] },
@@ -25,8 +25,8 @@
     { label: 'Segment Registry',       href: '/segments/list.html',                   roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
     { label: 'CPR Registry',           href: '/cpr/list.html',                        roles: ['SUPER_ADMIN', 'ADMIN'] },
 
-    { type: 'section', label: 'PSM', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES'] },
-    { label: 'Price Special Management', href: '/psm/list.html',                      roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES'] },
+    { type: 'section', label: 'PSM', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES', 'REGIONAL_MANAGER', 'AREA_MANAGER'] },
+    { label: 'Price Special Management', href: '/psm/list.html',                      roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN', 'SALES', 'REGIONAL_MANAGER', 'AREA_MANAGER'] },
 
     { type: 'section', label: 'REPORTS', roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
     { label: 'PSM Report',             href: '/reports/psm.html',                     roles: ['SUPER_ADMIN', 'ADMIN', 'COMMERCIAL_ADMIN'] },
